@@ -352,15 +352,23 @@ impl<'a> State<'a> {
     }
 }
 
+fn init(state: &mut State, start: &Instant) {
+    let time = TIME_LIMIT / 300;
+    let mut elapsed_time = start.elapsed().as_millis();
+    while elapsed_time < time {
+        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
+        for _ in 0..LOOP_PER_TIME_CHECK {
+            state.update(true, temperature, 100);
+        }
+        elapsed_time = start.elapsed().as_millis();
+    }
+}
+
 fn simulate(state: &mut State, start: &Instant) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < TIME_LIMIT {
-        //eprintln!("{}", elapsed_time);
-        let saved_score = state.score;
-        let calculated_score = state.score_all();
-        //eprintln!("{} : {}", saved_score, calculated_score);
+        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
             state.update(true, temperature, 1);
         }
         elapsed_time = start.elapsed().as_millis();
@@ -421,6 +429,7 @@ fn main() {
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r);
+    init(&mut state, &start);
     simulate(&mut state, &start);
 
     let mul = 1000000000;
