@@ -1,1 +1,4 @@
 cargo run < tester/tools/in/0000.txt > tester/tools/out/0000.txt
+cd tester/tools
+cargo run --release --bin vis in/0000.txt out/0000.txt
+cd ../..
