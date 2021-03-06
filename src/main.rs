@@ -4,10 +4,11 @@ use std::cmp;
 use std::fmt;
 use Direction::*;
 
-const TIME_LIMIT: u128 = 10900;
+const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 100;
 const START_TMP: f64 = 50.0;
 const END_TMP: f64 = 10.0;
+const SZ: i64 = 10000;
 
 #[derive(Clone)]
 pub enum Direction {
@@ -140,12 +141,9 @@ impl<'a> State<'a> {
                 self.rand.rand_int(0, 1) as i64 * 2 - 1
             };
 
-        /*
         let dir_idx = self.rand.rand_int(0, 3) as usize;
         // どの辺を操作するか
         let dir = self.dir[dir_idx].clone();
-        */
-        let dir = Left;
 
         let mut ok = true;
         let prev_area = self.adv[i].area();
@@ -187,13 +185,100 @@ impl<'a> State<'a> {
                 }
             },
             Right => {
-                let x = self.adv[i].x2;
+                if sign == 1 {
+                    self.adv[i].x2 += val;
+                    if self.adv[i].x2 > SZ {
+                        ok = false;
+                    }
+                    if ok {
+                        for j in 0..self.n {
+                            if i == j {
+                                continue;
+                            }
+                            if self.adv[i].cross(&self.adv[j]) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok {
+                        new_score += self.score(i, self.adv[i].area());
+                    } else {
+                        self.adv[i].x2 -= val;
+                    }
+                } else {
+                    self.adv[i].x2 -= val;
+                    if self.adv[i].x2 <= self.x[i] {
+                        ok = false;
+                        self.adv[i].x2 += val;
+                    } else {
+                        new_score += self.score(i, self.adv[i].area());
+                    }
+                }
             },
             Up => {
-                let y = self.adv[i].y1;
+                if sign == 1 {
+                    self.adv[i].y1 -= val;
+                    if self.adv[i].y1 < 0 {
+                        ok = false;
+                    }
+                    if ok {
+                        for j in 0..self.n {
+                            if i == j {
+                                continue;
+                            }
+                            if self.adv[i].cross(&self.adv[j]) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok {
+                        new_score += self.score(i, self.adv[i].area());
+                    } else {
+                        self.adv[i].y1 += val;
+                    }
+                } else {
+                    self.adv[i].y1 += val;
+                    if self.adv[i].y1 > self.y[i] {
+                        ok = false;
+                        self.adv[i].y1 -= val;
+                    } else {
+                        new_score += self.score(i, self.adv[i].area());
+                    }
+                }
             },
             Down => {
-                let y = self.adv[i].y2;
+                if sign == 1 {
+                    self.adv[i].y2 += val;
+                    if self.adv[i].y2 > SZ {
+                        ok = false;
+                    }
+                    if ok {
+                        for j in 0..self.n {
+                            if i == j {
+                                continue;
+                            }
+                            if self.adv[i].cross(&self.adv[j]) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok {
+                        new_score += self.score(i, self.adv[i].area());
+                    } else {
+                        self.adv[i].y2 -= val;
+                    }
+                } else {
+                    self.adv[i].y2 -= val;
+                    if self.adv[i].y2 <= self.y[i] {
+                        ok = false;
+                        self.adv[i].y2 += val;
+                    } else {
+                        new_score += self.score(i, self.adv[i].area());
+                    }
+                }
             },
         }
 
@@ -224,13 +309,25 @@ impl<'a> State<'a> {
                 }
             },
             Right => {
-
+                if sign == 1 {
+                    self.adv[i].x2 -= val;
+                } else {
+                    self.adv[i].x2 += val;
+                }
             },
             Up => {
-
+                if sign == 1 {
+                    self.adv[i].y1 += val;
+                } else {
+                    self.adv[i].y1 -= val;
+                }
             },
             Down => {
-
+                if sign == 1 {
+                    self.adv[i].y2 -= val;
+                } else {
+                    self.adv[i].y2 += val;
+                }
             },
         }
     }
@@ -261,7 +358,7 @@ fn simulate(state: &mut State, start: &Instant) {
         //eprintln!("{}", elapsed_time);
         let saved_score = state.score;
         let calculated_score = state.score_all();
-        eprintln!("{} : {}", saved_score, calculated_score);
+        //eprintln!("{} : {}", saved_score, calculated_score);
         for _ in 0..LOOP_PER_TIME_CHECK {
             let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
             state.update(true, temperature, 1);
