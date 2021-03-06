@@ -433,7 +433,6 @@ fn main() {
     simulate(&mut state, &start);
 
     let mul = 1000000000;
-    eprintln!("hogehoge");
     eprintln!("cntupd: {}", state.cntupd);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
