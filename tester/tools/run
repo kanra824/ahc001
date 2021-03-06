@@ -1,0 +1,1 @@
+cargo run --release --bin vis in/0000.txt out/0000.txt

@@ -129,7 +129,7 @@ impl<'a> State<'a> {
         state
     }
 
-    fn update(&mut self, incr: bool, temperature: f64, val: i64) {
+    fn update(&mut self, incr: bool, _temperature: f64, val: i64) {
         // 変化させるidx
         let i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
         // 変化させる方向
@@ -369,7 +369,7 @@ fn simulate(state: &mut State, start: &Instant) {
     while elapsed_time < TIME_LIMIT {
         let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, temperature, 1);
+            state.update(true, temperature, 10);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -379,23 +379,23 @@ fn main() {
     let start = Instant::now();
 
     input! {
-        inN: usize,
-        input: [[i64; 3]; inN],
+        in_n: usize,
+        input: [[i64; 3]; in_n],
     }
 
-    let mut inx: Vec<i64> = vec![0; inN];
-    let mut iny: Vec<i64> = vec![0; inN];
-    let mut inr: Vec<i64> = vec![0; inN];
+    let mut inx: Vec<i64> = vec![0; in_n];
+    let mut iny: Vec<i64> = vec![0; in_n];
+    let mut inr: Vec<i64> = vec![0; in_n];
 
-    for i in 0..inN {
+    for i in 0..in_n {
         inx[i] = input[i][0];
         iny[i] = input[i][1];
         inr[i] = input[i][2];
     }
 
-    let mut sel = vec![true; inN];
+    let mut sel = vec![true; in_n];
 
-    for i in 0..inN {
+    for i in 0..in_n {
         for j in 0..i {
             if inx[i] == inx[j] && iny[i] == iny[j] {
                 if inr[i] <= inr[j] {
@@ -413,7 +413,7 @@ fn main() {
     let mut sel_idx: Vec<usize> = Vec::new();
     let mut not_sel_idx: Vec<usize> = Vec::new();
 
-    for i in 0..inN {
+    for i in 0..in_n {
         if sel[i] {
             x.push(inx[i]);
             y.push(iny[i]);
@@ -440,7 +440,7 @@ fn main() {
 
 
     // print answer
-    if n == inN {
+    if n == in_n {
         for i in 0..n {
             println!("{}", state.adv[i]);
         }

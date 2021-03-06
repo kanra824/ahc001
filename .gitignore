@@ -1,4 +1,8 @@
 /target/
 **/*.rs.bk
 **/*~
-tester/
+tester/tools/in
+tester/tools/out
+tester/tools/svg
+tester/tools/target
+tester/tools/score

@@ -1,1 +1,4 @@
-cargo run < tester/tools/in/0000.txt > tester/tools/out/0000.txt
+cargo run < tester/tools/in/$1.txt > tester/tools/out/$1.txt
+cd tester/tools
+cargo run --release --bin vis in/$1.txt out/$1.txt svg/$1.svg
+cd ../..
