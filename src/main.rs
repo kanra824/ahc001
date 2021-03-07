@@ -199,9 +199,9 @@ impl<'a> State<'a> {
 
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
-        self.score_v[i] -= self.score(i, self.adv[i].area());
+        self.score_v[i] -= self.score(i);
         let mut ok = self.update_adv(i, &dir, sign, val, &mut shrinked);
-        self.score_v[i] += self.score(i, self.adv[i].area());
+        self.score_v[i] += self.score(i);
 
 
         // shrinkedの各要素を縮める
@@ -209,9 +209,9 @@ impl<'a> State<'a> {
             for j in 0..shrinked.len() {
                 let ndir = dir.reverse();
                 let mut fake_shrinked: Vec<usize> = Vec::new();
-                self.score_v[j] -= self.score(shrinked[j], self.adv[shrinked[j]].area());
+                self.score_v[j] -= self.score(shrinked[j]);
                 ok &= self.update_adv(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
-                self.score_v[j] += self.score(shrinked[j], self.adv[shrinked[j]].area());
+                self.score_v[j] += self.score(shrinked[j]);
                 assert_eq!(fake_shrinked.len(), 0);
             }
         }
@@ -254,15 +254,15 @@ impl<'a> State<'a> {
             if self.adv[i].x1 == -1 {
                 continue;
             }
-            let nows = self.adv[i].area();
-            score += self.score(i, nows) as f64;
+            score += self.score(i) as f64;
         }
         score
     }
 
     // 広告ひとつのスコアを計算
-    fn score(&self, i: usize, s: i64) -> f64 {
+    fn score(&self, i: usize) -> f64 {
         // 1 - (1 - min(ri, si) / max(ri, si)) ^ 2
+        let s = self.adv[i].area();
         1.0 - (1.0 - cmp::min(self.r[i], s) as f64 / cmp::max(self.r[i], s) as f64).powi(2)
     }
 
@@ -297,14 +297,14 @@ impl<'a> State<'a> {
 
     // dir, sign, valはupdate_advの時と同じ値であることに注意
     fn revert(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &Vec<usize>) {
-        self.score_v[i] -= self.score(i, self.adv[i].area());
+        self.score_v[i] -= self.score(i);
         match dir {
             Left => self.adv[i].x1 += sign * val,
             Right => self.adv[i].x2 -= sign * val,
             Up => self.adv[i].y1 += sign * val,
             Down => self.adv[i].y2 -= sign * val,
         }
-        self.score_v[i] += self.score(i, self.adv[i].area());
+        self.score_v[i] += self.score(i);
         let ndir = dir.reverse();
         let mut fake_shrinked = Vec::new();
         for j in 0..shrinked.len() {
