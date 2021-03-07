@@ -1,0 +1,4 @@
+cd tester/tools
+cargo run --bin gen_seed 50 > seeds.txt
+cargo run --bin gen < seeds.txt
+cd ../..
