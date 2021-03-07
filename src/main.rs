@@ -313,35 +313,12 @@ impl<'a> State<'a> {
     }
 }
 
-fn init(state: &mut State, start: &Instant) {
-    let time = TIME_LIMIT / 300;
+fn simulate(state: &mut State, start: &Instant, time_limit: u128, incr: bool, annealing: bool, score_prob: bool, val: i64) {
     let mut elapsed_time = start.elapsed().as_millis();
-    while elapsed_time < time {
+    while elapsed_time < time_limit {
         let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, false, false, temperature, 100);
-        }
-        elapsed_time = start.elapsed().as_millis();
-    }
-}
-
-fn simulate(state: &mut State, start: &Instant) {
-    let mut elapsed_time = start.elapsed().as_millis();
-    while elapsed_time < TIME_LIMIT / 5 * 4 {
-        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
-        for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(false, true, false, temperature, 10);
-        }
-        elapsed_time = start.elapsed().as_millis();
-    }
-}
-
-fn finalize(state: &mut State, start: &Instant) {
-    let mut elapsed_time = start.elapsed().as_millis();
-    while elapsed_time < TIME_LIMIT {
-        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
-        for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, true, true, temperature, 10);
+            state.update(incr, annealing, score_prob, temperature, val);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -401,9 +378,10 @@ fn main() {
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r);
-    init(&mut state, &start);
-    simulate(&mut state, &start);
-    finalize(&mut state, &start);
+    simulate(&mut state, &start, TIME_LIMIT / 300, true, false, false, 100);
+    simulate(&mut state, &start, TIME_LIMIT / 5 * 4, false, true, false, 10);
+    simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
+
 
     let mul = 1000000000;
     eprintln!("cntchal: {}", state.cntchal);
