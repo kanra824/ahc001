@@ -95,9 +95,12 @@ fn color(val: f64) -> String {
 	}
 }
 
-fn vis(input: &Input, out: &Vec<Rect>, path: &String, show_id: bool) {
-	let mut doc = svg::Document::new().set("viewBox", (-100, -100, W + 200, W + 200));
+fn vis(input: &Input, out: &Vec<Rect>, path: &String, score: i64, show_id: bool, show_area: bool) {
+	let mut doc = svg::Document::new().set("viewBox", (-100, -300, W + 200, W + 500));
 	doc = doc.add(Path::new().set("fill", "white").set("d", rect(Rect { x1: 0, y1: 0, x2: W, y2: W })));
+	let fontsize = 200.0;
+	doc = doc.add(svg::node::element::Text::new().set("x", 1000).set("y", -200.0 + fontsize * 0.5).set("font-size", fontsize).set("text-anchor", "middle").add(svg::node::Text::new(format!("score: {}", score as f64 / 1000000000 as f64))));
+	// 長方形
 	for i in 0..input.ps.len() {
 		let val = if out[i].size() > input.size[i] {
 			1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
@@ -107,6 +110,7 @@ fn vis(input: &Input, out: &Vec<Rect>, path: &String, show_id: bool) {
 		let path = Path::new().set("fill", color(val)).set("stroke", "black").set("stroke-width", 5.0).set("d", rect(out[i]));
 		doc = doc.add(path);
 	}
+	//　指定位置と長方形の中心位置のズレ
 	for i in 0..input.ps.len() {
 		let data = rect(Rect { x1: input.ps[i].0 - 30, x2: input.ps[i].0 + 30, y1: input.ps[i].1 - 30, y2: input.ps[i].1 + 30 });
 		let path = Path::new().set("fill", "green").set("d", data);
@@ -125,6 +129,16 @@ fn vis(input: &Input, out: &Vec<Rect>, path: &String, show_id: bool) {
 			doc = doc.add(svg::node::element::Text::new().set("x", cx).set("y", cy + fontsize * 0.35).set("font-size", fontsize).set("text-anchor", "middle").add(svg::node::Text::new(format!("{}", i))));
 		}
 	}
+	if show_area {
+		let fontsize = 200.0 / (input.ps.len() as f64 / 50.0).sqrt();
+		for i in 0..input.ps.len() {
+			let cx = (out[i].x1 + out[i].x2) as f64 / 2.0;
+			let cy = (out[i].y1 + out[i].y2) as f64 / 2.0;
+			let s = out[i].size().min(input.size[i]) as f64 / out[i].size().max(input.size[i]) as f64;
+			let score = 1.0 - (1.0 - s) * (1.0 - s);
+			doc = doc.add(svg::node::element::Text::new().set("x", cx).set("y", cy + fontsize * 0.35).set("font-size", fontsize).set("text-anchor", "middle").add(svg::node::Text::new(format!("{}", (score * 100.0) as i64))));
+		}
+	}
 	svg::save(path, &doc).unwrap();
 }
 
@@ -135,14 +149,14 @@ fn main() {
 	}
 	let input = read_input(&std::env::args().nth(1).unwrap());
 	let output = read_output(&input, &std::env::args().nth(2).unwrap());
+	let score = score(&input, &output);
 
-	println!("{}", score(&input, &output));
+	println!("{}", score);
 
+	let mut path = "out.svg".to_string();
 	if std::env::args().len() == 4 {
-		let path = &std::env::args().nth(3).unwrap();
-		vis(&input, &output, path, true);
-	} else {
-		vis(&input, &output, &"out.svg".to_string(), true);
+		path = std::env::args().nth(3).unwrap();
 	}
+	vis(&input, &output, &path, score, false, true);
 
 }
