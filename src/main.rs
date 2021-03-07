@@ -17,6 +17,16 @@ pub enum Direction {
     Up,
     Down,
 }
+impl Direction {
+    fn reverse(&self) -> Direction {
+        match self {
+            Left => Right,
+            Right => Left,
+            Up => Down,
+            Down => Up
+        }
+    }
+}
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -120,7 +130,6 @@ impl<'a> State<'a> {
             midiff: 100000000.0,
             madiff: 0.0,
         };
-
         for i in 0..n {
             state.adv[i] = Advertizement{
                 x1: x[i],
@@ -129,9 +138,7 @@ impl<'a> State<'a> {
                 y2: y[i]+1,
             };
         }
-
         state.score = state.score_all();
-
         state
     }
 
@@ -151,36 +158,23 @@ impl<'a> State<'a> {
         // どの辺を操作するか
         let dir = self.dir[dir_idx].clone();
 
-        let mut ok = true;
-        let prev_area = self.adv[i].area();
+        // 更新後のスコア
         let mut new_score: f64 = self.score;
-
-        // 重なってたらやめる
+        // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
-        let mut shrinked_stop_idx = 0;
         new_score -= self.score(i, self.adv[i].area());
-        self.update_adv(i, &dir, sign, val, &mut ok, &mut shrinked);
+        let mut ok = self.update_adv(i, &dir, sign, val, &mut shrinked);
         new_score += self.score(i, self.adv[i].area());
 
+        // shrinkedの各要素を縮める
         if ok {
             for j in 0..shrinked.len() {
-                let ndir = match dir {
-                    Left => Right,
-                    Right => Left,
-                    Up => Down,
-                    Down => Up,
-                };
-                let mut nok = true;
+                let ndir = dir.reverse();
                 let mut fake_shrinked: Vec<usize> = Vec::new();
                 new_score -= self.score(shrinked[j], self.adv[shrinked[j]].area());
-                self.update_adv(shrinked[j], &ndir, -1, val, &mut nok, &mut fake_shrinked);
+                ok &= self.update_adv(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
                 new_score += self.score(shrinked[j], self.adv[shrinked[j]].area());
-                shrinked_stop_idx += 1;
                 assert_eq!(fake_shrinked.len(), 0);
-                if !nok {
-                    ok = false;
-                    break;
-                }
             }
         }
         let diff = new_score - self.score;
@@ -192,26 +186,23 @@ impl<'a> State<'a> {
             }
             self.midiff = self.midiff.min(diff);
         }
-        
-        let upd = ok && if annealing {
-            let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
-            //eprintln!("{} : {} : {}", prob, temperature, new_score - self.score);
-            self.rand.randf() < prob
-        } else {
-            new_score > self.score
-        };
+        let upd = ok &&
+            if annealing {
+                // 焼きなましの時
+                let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
+                //eprintln!("{} : {} : {}", prob, temperature, new_score - self.score);
+                self.rand.randf() < prob
+            } else {
+                // 山登りの時
+                new_score > self.score
+            };
 
         if upd {
             self.cntupd += 1;
             self.score = new_score;
         } else {
-            self.revert(i, &dir, sign, val, &mut shrinked, shrinked_stop_idx);
+            self.revert(i, &dir, sign, val, &mut shrinked);
         }
-
-
-        //if self.rand.randf() < prob {
-            // update
-        //}
     }
 
     // 10^9をかける手前までのスコアを計算
@@ -233,7 +224,8 @@ impl<'a> State<'a> {
         1.0 - (1.0 - cmp::min(self.r[i], s) as f64 / cmp::max(self.r[i], s) as f64).powi(2)
     }
 
-    fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, ok: &mut bool, shrinked: &mut Vec<usize>) {
+    fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
+        // i番目の広告を更新
         match dir {
             Left => self.adv[i].x1 -= sign * val,
             Right => self.adv[i].x2 += sign * val,
@@ -241,49 +233,38 @@ impl<'a> State<'a> {
             Down => self.adv[i].y2 += sign *val,
         }
 
-        if sign == 1 {
-            *ok = *ok && match dir {
-                Left => self.adv[i].x1 >= 0,
-                Right => self.adv[i].x2 <= SZ,
-                Up => self.adv[i].y1 >= 0,
-                Down => self.adv[i].y2 <= SZ,
-            };
-            if *ok {
-                for j in 0..self.n {
-                    if i == j {
-                        continue;
-                    }
-                    if self.adv[i].cross(&self.adv[j]) {
-                        shrinked.push(j);
-                    }
+        // 更新後の長方形が(単独で)正しいかどうか確認
+        let ok = match dir {
+            Left => 0 <= self.adv[i].x1 && self.adv[i].x1 <= self.x[i],
+            Right => self.x[i] < self.adv[i].x2 && self.adv[i].x2 <= SZ,
+            Up => 0 <= self.adv[i].y1 && self.adv[i].y1 <= self.y[i],
+            Down => self.y[i] < self.adv[i].y2 && self.adv[i].y2 <= SZ,
+        };
+
+        if ok && sign == 1 {
+            // 更新後の長方形と重なる長方形のidxをshrinkedに格納
+            for j in 0..self.n {
+                if i != j && self.adv[i].cross(&self.adv[j]) {
+                    shrinked.push(j);
                 }
             }
-        } else {
-            *ok = *ok && match dir {
-                Left => self.adv[i].x1 <= self.x[i],
-                Right => self.adv[i].x2 > self.x[i],
-                Up => self.adv[i].y1 <= self.y[i],
-                Down => self.adv[i].y2 > self.y[i],
-            };
         }
+
+        ok
     }
 
-    fn revert(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &Vec<usize>, shrinked_stop_idx: usize) {
+    // dir, sign, valはupdate_advの時と同じ値であることに注意
+    fn revert(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &Vec<usize>) {
         match dir {
             Left => self.adv[i].x1 += sign * val,
             Right => self.adv[i].x2 -= sign * val,
             Up => self.adv[i].y1 += sign * val,
             Down => self.adv[i].y2 -= sign * val,
         }
-        let ndir = match dir {
-            Left => Right,
-            Right => Left,
-            Up => Down,
-            Down => Up,
-        };
+        let ndir = dir.reverse();
         let mut fake_shrinked = Vec::new();
-        for j in 0..shrinked_stop_idx {
-            self.revert(shrinked[j], &ndir, -1, val, &mut fake_shrinked, 0);
+        for j in 0..shrinked.len() {
+            self.revert(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
         }
     }
 }
