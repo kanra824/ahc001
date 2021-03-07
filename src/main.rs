@@ -100,6 +100,7 @@ struct State<'a> {
     adv: Vec<Advertizement>,
     dir: Vec<Direction>,
     cntupd: i64,
+    cntchal: i64,
 }
 impl<'a> State<'a> {
     fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>) -> Self {
@@ -113,6 +114,7 @@ impl<'a> State<'a> {
             adv: vec![Advertizement{x1:-1, y1:-1, x2:-1, y2:-1} ;n],
             dir: vec![Left, Right, Up, Down],
             cntupd: 0,
+            cntchal: 0,
         };
 
         for i in 0..n {
@@ -150,145 +152,18 @@ impl<'a> State<'a> {
         let mut new_score: f64 = self.score - self.score(i, prev_area);
 
         // 重なってたらやめる
-        match dir {
-            Left => {
-                if sign == 1 {
-                    self.adv[i].x1 -= val;
-                    if self.adv[i].x1 < 0 {
-                        ok = false;
-                    }
-                    if ok {
-                        for j in 0..self.n {
-                            // 増えた部分の交差判定
-                            if i == j {
-                                continue;
-                            }
-                            if self.adv[i].cross(&self.adv[j]) {
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    if ok {
-                        new_score += self.score(i, self.adv[i].area());
-                    } else {
-                        self.adv[i].x1 += val;
-                    } 
-                } else {
-                    self.adv[i].x1 += val;
-                    if self.adv[i].x1 > self.x[i] {
-                        ok = false;
-                        self.adv[i].x1 -= val;
-                    } else {
-                        new_score += self.score(i, self.adv[i].area());
-                    }
-                }
-            },
-            Right => {
-                if sign == 1 {
-                    self.adv[i].x2 += val;
-                    if self.adv[i].x2 > SZ {
-                        ok = false;
-                    }
-                    if ok {
-                        for j in 0..self.n {
-                            if i == j {
-                                continue;
-                            }
-                            if self.adv[i].cross(&self.adv[j]) {
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    if ok {
-                        new_score += self.score(i, self.adv[i].area());
-                    } else {
-                        self.adv[i].x2 -= val;
-                    }
-                } else {
-                    self.adv[i].x2 -= val;
-                    if self.adv[i].x2 <= self.x[i] {
-                        ok = false;
-                        self.adv[i].x2 += val;
-                    } else {
-                        new_score += self.score(i, self.adv[i].area());
-                    }
-                }
-            },
-            Up => {
-                if sign == 1 {
-                    self.adv[i].y1 -= val;
-                    if self.adv[i].y1 < 0 {
-                        ok = false;
-                    }
-                    if ok {
-                        for j in 0..self.n {
-                            if i == j {
-                                continue;
-                            }
-                            if self.adv[i].cross(&self.adv[j]) {
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    if ok {
-                        new_score += self.score(i, self.adv[i].area());
-                    } else {
-                        self.adv[i].y1 += val;
-                    }
-                } else {
-                    self.adv[i].y1 += val;
-                    if self.adv[i].y1 > self.y[i] {
-                        ok = false;
-                        self.adv[i].y1 -= val;
-                    } else {
-                        new_score += self.score(i, self.adv[i].area());
-                    }
-                }
-            },
-            Down => {
-                if sign == 1 {
-                    self.adv[i].y2 += val;
-                    if self.adv[i].y2 > SZ {
-                        ok = false;
-                    }
-                    if ok {
-                        for j in 0..self.n {
-                            if i == j {
-                                continue;
-                            }
-                            if self.adv[i].cross(&self.adv[j]) {
-                                ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    if ok {
-                        new_score += self.score(i, self.adv[i].area());
-                    } else {
-                        self.adv[i].y2 -= val;
-                    }
-                } else {
-                    self.adv[i].y2 -= val;
-                    if self.adv[i].y2 <= self.y[i] {
-                        ok = false;
-                        self.adv[i].y2 += val;
-                    } else {
-                        new_score += self.score(i, self.adv[i].area());
-                    }
-                }
-            },
-        }
+        self.update_adv(i, &dir, sign, val, &mut ok);
 
         if ok {
-            if new_score >= self.score {
-                self.cntupd += 1;
-                self.score = new_score;
-            } else {
-                self.revert(i, dir, sign, val);
-            }
+            new_score += self.score(i, self.adv[i].area());
+        }
+
+        self.cntchal += 1;
+        if ok && new_score >= self.score {
+            self.cntupd += 1;
+            self.score = new_score;
+        } else {
+            self.revert(i, &dir, sign, val);
         }
 
         //let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
@@ -297,39 +172,6 @@ impl<'a> State<'a> {
         //if self.rand.randf() < prob {
             // update
         //}
-    }
-
-    fn revert(&mut self, i: usize, dir: Direction, sign: i64, val: i64) {
-        match dir {
-            Left => {
-                if sign == 1 {
-                    self.adv[i].x1 += val;
-                } else {
-                    self.adv[i].x1 -= val;
-                }
-            },
-            Right => {
-                if sign == 1 {
-                    self.adv[i].x2 -= val;
-                } else {
-                    self.adv[i].x2 += val;
-                }
-            },
-            Up => {
-                if sign == 1 {
-                    self.adv[i].y1 += val;
-                } else {
-                    self.adv[i].y1 -= val;
-                }
-            },
-            Down => {
-                if sign == 1 {
-                    self.adv[i].y2 -= val;
-                } else {
-                    self.adv[i].y2 += val;
-                }
-            },
-        }
     }
 
     // 10^9をかける手前までのスコアを計算
@@ -349,6 +191,49 @@ impl<'a> State<'a> {
     fn score(&self, i: usize, s: i64) -> f64 {
         // 1 - (1 - min(ri, si) / max(ri, si)) ^ 2
         1.0 - (1.0 - cmp::min(self.r[i], s) as f64 / cmp::max(self.r[i], s) as f64).powi(2)
+    }
+
+    fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, ok: &mut bool) {
+        match dir {
+            Left => self.adv[i].x1 -= sign * val,
+            Right => self.adv[i].x2 += sign * val,
+            Up => self.adv[i].y1 -= sign * val,
+            Down => self.adv[i].y2 += sign *val,
+        }
+
+        if sign == 1 {
+            *ok = *ok && match dir {
+                Left => self.adv[i].x1 >= 0,
+                Right => self.adv[i].x2 <= SZ,
+                Up => self.adv[i].y1 >= 0,
+                Down => self.adv[i].y2 <= SZ,
+            };
+            for j in 0..self.n {
+                if i == j {
+                    continue;
+                }
+                if !*ok {
+                    break;
+                }
+                *ok = *ok && !self.adv[i].cross(&self.adv[j]);
+            }
+        } else {
+            *ok = *ok && match dir {
+                Left => self.adv[i].x1 <= self.x[i],
+                Right => self.adv[i].x2 > self.x[i],
+                Up => self.adv[i].y1 <= self.y[i],
+                Down => self.adv[i].y2 > self.y[i],
+            };
+        }
+    }
+
+    fn revert(&mut self, i: usize, dir: &Direction, sign: i64, val: i64) {
+        match dir {
+            Left => self.adv[i].x1 += sign * val,
+            Right => self.adv[i].x2 -= sign * val,
+            Up => self.adv[i].y1 += sign * val,
+            Down => self.adv[i].y2 -= sign * val,
+        }
     }
 }
 
@@ -433,10 +318,10 @@ fn main() {
     simulate(&mut state, &start);
 
     let mul = 1000000000;
+    eprintln!("cntchal: {}", state.cntchal);
     eprintln!("cntupd: {}", state.cntupd);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
-
 
 
     // print answer
