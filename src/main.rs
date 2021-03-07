@@ -6,8 +6,8 @@ use Direction::*;
 
 const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 100;
-const START_TMP: f64 = 50.0;
-const END_TMP: f64 = 10.0;
+const START_TMP: f64 = 0.001;
+const END_TMP: f64 = 0.0001;
 const SZ: i64 = 10000;
 
 #[derive(Clone)]
@@ -101,6 +101,8 @@ struct State<'a> {
     dir: Vec<Direction>,
     cntupd: i64,
     cntchal: i64,
+    midiff: f64,
+    madiff: f64,
 }
 impl<'a> State<'a> {
     fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>) -> Self {
@@ -115,6 +117,8 @@ impl<'a> State<'a> {
             dir: vec![Left, Right, Up, Down],
             cntupd: 0,
             cntchal: 0,
+            midiff: 100000000.0,
+            madiff: 0.0,
         };
 
         for i in 0..n {
@@ -131,7 +135,7 @@ impl<'a> State<'a> {
         state
     }
 
-    fn update(&mut self, incr: bool, _temperature: f64, val: i64) {
+    fn update(&mut self, incr: bool, annealing: bool, temperature: f64, val: i64) {
         // 変化させるidx
         let i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
         // 変化させる方向
@@ -157,17 +161,31 @@ impl<'a> State<'a> {
         if ok {
             new_score += self.score(i, self.adv[i].area());
         }
+        let diff = new_score - self.score;
 
         self.cntchal += 1;
-        if ok && new_score >= self.score {
+        if annealing {
+            if diff < 0.0 {
+                self.madiff = self.madiff.max(diff);
+            }
+            self.midiff = self.midiff.min(diff);
+        }
+        
+        let upd = ok && if annealing {
+            let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
+            //eprintln!("{} : {} : {}", prob, temperature, new_score - self.score);
+            self.rand.randf() < prob
+        } else {
+            new_score > self.score
+        };
+
+        if upd {
             self.cntupd += 1;
             self.score = new_score;
         } else {
             self.revert(i, &dir, sign, val);
         }
 
-        //let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
-        // !!!!!!!!!!!!!!!!!!!! MAXIMIZE !!!!!!!!!!!!!!!!!!!!
 
         //if self.rand.randf() < prob {
             // update
@@ -243,7 +261,7 @@ fn init(state: &mut State, start: &Instant) {
     while elapsed_time < time {
         let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, temperature, 100);
+            state.update(true, false, temperature, 100);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -254,7 +272,7 @@ fn simulate(state: &mut State, start: &Instant) {
     while elapsed_time < TIME_LIMIT {
         let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, temperature, 10);
+            state.update(false, true, temperature, 10);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -320,6 +338,8 @@ fn main() {
     let mul = 1000000000;
     eprintln!("cntchal: {}", state.cntchal);
     eprintln!("cntupd: {}", state.cntupd);
+    eprintln!("midiff: {}", state.midiff);
+    eprintln!("madiff: {}", state.madiff);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
 
