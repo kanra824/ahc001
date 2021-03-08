@@ -2,6 +2,7 @@ use proconio::input;
 use std::time::Instant;
 use std::cmp;
 use std::fmt;
+use std::collections::HashSet;
 use Direction::*;
 
 const TIME_LIMIT: u128 = 4900;
@@ -116,6 +117,7 @@ struct State<'a> {
     cntchal: i64,
     midiff: f64,
     madiff: f64,
+    chal_idx: Vec<i64>,
     upd_idx: Vec<i64>,
 }
 impl<'a> State<'a> {
@@ -138,6 +140,7 @@ impl<'a> State<'a> {
             cntchal: 0,
             midiff: 100000000.0,
             madiff: 0.0,
+            chal_idx: vec![0; n],
             upd_idx: vec![0; n],
         };
         for i in 0..n {
@@ -152,7 +155,7 @@ impl<'a> State<'a> {
         state
     }
 
-    fn update(&mut self, incr: bool, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
+    fn update(&mut self, mut sign: i64, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
         // 長方形ごとのスコアに応じて確率を計算
         let mut i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
         if score_prob {
@@ -167,23 +170,38 @@ impl<'a> State<'a> {
                 now += self.prob_v[j] / self.prob_sum;
             }
         }
-        self.upd_idx[i] += 1;
-        // 変化させる方向
-        // 1: ひろげる, 2: ちぢめる
-        let sign: i64 = 
-            if incr {
-                1
-            } else {
-                self.rand.rand_int(0, 1) as i64 * 2 - 1
-            };
-
+        
         let dir_idx = self.rand.rand_int(0, 3) as usize;
+        let dir_idx2 = self.rand.rand_int(0, 3) as usize;
         // どの辺を操作するか
         let dir = self.dir[dir_idx].clone();
+        let dir2 = self.dir[dir_idx2].clone();
 
+        // 変化させる方向
+        // 1: ひろげる, -1: ちぢめる
+        // 指定がなければ確率でちぢめてひろげる
+        if sign == 0 {
+            let p = self.rand.randf();
+            sign = if p < 0.4 {
+                1
+            } else if p < 0.4 {
+                -1
+            } else {
+                0
+            }
+        }
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
-        let mut ok = self.update_adv(i, &dir, sign, val, &mut shrinked);
+        let mut ok;
+        if sign == 1 {
+            ok = self.update_adv(i, &dir, 1, val, &mut shrinked);
+        } else if sign == -1 {
+            ok = self.update_adv(i, &dir, -1, val, &mut shrinked);
+        } else {
+            ok = self.update_adv(i, &dir2, -1, val, &mut shrinked);
+            assert_eq!(shrinked.len(), 0);
+            ok &= self.update_adv(i, &dir, 1, val, &mut shrinked);
+        }
         let mut new_score = self.score;
         new_score -= self.score_v[i];
         self.score_v[i] = self.score(i);
@@ -194,20 +212,22 @@ impl<'a> State<'a> {
 
 
         // shrinkedの各要素を縮める
-        if ok {
-            for j in 0..shrinked.len() {
-                let idx = shrinked[j];
-                let ndir = dir.reverse();
-                let mut fake_shrinked: Vec<usize> = Vec::new();
-                ok &= self.update_adv(idx, &ndir, -1, val, &mut fake_shrinked);
-                new_score -= self.score_v[idx];
-                self.score_v[idx] = self.score(idx);
-                new_score += self.score_v[idx];
-                self.prob_sum -= self.prob_v[idx];
-                self.prob_v[idx] = self.calc_prob(idx);
-                self.prob_sum += self.prob_v[idx];
-                assert_eq!(fake_shrinked.len(), 0);
-            }
+        for j in &shrinked {
+            let idx = *j;
+            let ndir = dir.reverse();
+            let mut fake_shrinked: Vec<usize> = Vec::new();
+            ok &= self.update_adv(idx, &ndir, -1, val, &mut fake_shrinked);
+            
+            // スコアの計算と更新
+            new_score -= self.score_v[idx];
+            self.score_v[idx] = self.score(idx);
+            new_score += self.score_v[idx];
+
+            // 確率の計算と更新
+            self.prob_sum -= self.prob_v[idx];
+            self.prob_v[idx] = self.calc_prob(idx);
+            self.prob_sum += self.prob_v[idx];
+            assert_eq!(fake_shrinked.len(), 0);
         }
         let diff = new_score - self.score;
 
@@ -222,18 +242,31 @@ impl<'a> State<'a> {
             if annealing {
                 // 焼きなましの時
                 let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
-                //eprintln!("{} : {} : {}", prob, temperature, new_score - self.score);
+                //eprintln!("{} : {} : {} : {}", i, prob, temperature, new_score - self.score);
                 self.rand.randf() < prob
             } else {
                 // 山登りの時
                 new_score > self.score
             };
 
+        self.chal_idx[i] += 1;
         if upd {
+            self.upd_idx[i] += 1;
             self.cntupd += 1;
             self.score = new_score;
         } else {
-            self.revert(i, &dir, sign, val, &mut shrinked);
+            if sign == 1 {
+                self.revert(i, &dir, 1, val, &shrinked);
+            } else if sign == -1 {
+                self.revert(i, &dir, -1, val, &shrinked);
+            } else {
+                let fake_shrinked = Vec::new();
+                self.revert(i, &dir, 1, val, &shrinked);
+                self.revert(i, &dir2, -1, val, &fake_shrinked);
+            }
+
+
+
         }
     }
 
@@ -264,6 +297,13 @@ impl<'a> State<'a> {
     // idxを選択する確率に用いる、正規化する前の値
     fn calc_prob(&self, i: usize) -> f64 {
         self.score_v[i].powi(2)
+        /*
+        if self.adv[i].area() - self.r[i] > 0 {
+            0.0
+        } else {
+            1.0 / (self.score_v[i] + 0.0000001)
+        }
+        */
     }
 
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
@@ -309,18 +349,18 @@ impl<'a> State<'a> {
         self.prob_sum += self.prob_v[i];
         let ndir = dir.reverse();
         let mut fake_shrinked = Vec::new();
-        for j in 0..shrinked.len() {
-            self.revert(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
+        for j in shrinked {
+            self.revert(*j, &ndir, -1, val, &mut fake_shrinked);
         }
     }
 }
 
-fn simulate(state: &mut State, start: &Instant, time_limit: u128, incr: bool, annealing: bool, score_prob: bool, val: i64) {
+fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(incr, annealing, score_prob, temperature, val);
+            state.update(sign, annealing, score_prob, temperature, val);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -384,28 +424,29 @@ fn main() {
             std::env::args().nth(2).unwrap().parse().unwrap()
         )
     } else {
-        (0.001, 0.0001)
+        //(0.008836644575520086, 0.008950549607649214) // optuna
+        (0.0006979039523455251, 0.01290817137136288) // 479
+        //(0.001, 0.0001)
     };
     
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
-    simulate(&mut state, &start, TIME_LIMIT / 30, true, true, true, 100);
-    simulate(&mut state, &start, TIME_LIMIT / 3 * 2, false, true, false, 10);
-    simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
+    simulate(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100);
+    simulate(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10);
+    simulate(&mut state, &start, TIME_LIMIT, 0, false, true, 10);
 
 
     let mul = 1000000000;
     eprintln!("cntchal: {}", state.cntchal);
     eprintln!("cntupd: {}", state.cntupd);
-    eprintln!("midiff: {}", state.midiff);
-    eprintln!("madiff: {}", state.madiff);
+    //eprintln!("midiff: {}", state.midiff);
+    //eprintln!("madiff: {}", state.madiff);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
     /*
-    eprintln!("upd_idx");
     for i in 0..n {
-        eprintln!("{} : {}", i, state.upd_idx[i]);
+        eprintln!("{} : {} : {} : {}", i, state.upd_idx[i], state.chal_idx[i], state.score_v[i]);
     }
     */
 
