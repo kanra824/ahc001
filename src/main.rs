@@ -6,8 +6,6 @@ use Direction::*;
 
 const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 100;
-const START_TMP: f64 = 0.001;
-const END_TMP: f64 = 0.0001;
 const SZ: i64 = 10000;
 
 #[derive(Clone)]
@@ -101,6 +99,8 @@ impl fmt::Display for Advertizement {
 }
 
 struct State<'a> {
+    start_tmp: f64,
+    end_tmp: f64,
     n: usize,
     rand: Xorshift,
     score: f64,
@@ -119,9 +119,11 @@ struct State<'a> {
     upd_idx: Vec<i64>,
 }
 impl<'a> State<'a> {
-    fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>) -> Self {
+    fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>, start_tmp: f64, end_tmp: f64) -> Self {
         let mut state = State{
             n: n,
+            start_tmp: start_tmp,
+            end_tmp: end_tmp,
             rand: rand,
             score: 0.0,
             score_v: vec![0.0; n],
@@ -316,7 +318,7 @@ impl<'a> State<'a> {
 fn simulate(state: &mut State, start: &Instant, time_limit: u128, incr: bool, annealing: bool, score_prob: bool, val: i64) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
-        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
+        let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
             state.update(incr, annealing, score_prob, temperature, val);
         }
@@ -374,10 +376,20 @@ fn main() {
     }
 
     let n = x.len();
+
+    let (start_time, end_time) =
+    if std::env::args().len() >= 2 {
+        (
+            std::env::args().nth(1).unwrap().parse().unwrap(),
+            std::env::args().nth(2).unwrap().parse().unwrap()
+        )
+    } else {
+        (0.001, 0.0001)
+    };
     
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
-    let mut state = State::new(n, rand, &x, &y, &r);
+    let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
     simulate(&mut state, &start, TIME_LIMIT / 30, true, true, true, 100);
     simulate(&mut state, &start, TIME_LIMIT / 3 * 2, false, true, false, 10);
     simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
