@@ -116,6 +116,7 @@ struct State<'a> {
     cntchal: i64,
     midiff: f64,
     madiff: f64,
+    chal_idx: Vec<i64>,
     upd_idx: Vec<i64>,
 }
 impl<'a> State<'a> {
@@ -138,6 +139,7 @@ impl<'a> State<'a> {
             cntchal: 0,
             midiff: 100000000.0,
             madiff: 0.0,
+            chal_idx: vec![0; n],
             upd_idx: vec![0; n],
         };
         for i in 0..n {
@@ -167,7 +169,6 @@ impl<'a> State<'a> {
                 now += self.prob_v[j] / self.prob_sum;
             }
         }
-        self.upd_idx[i] += 1;
         // 変化させる方向
         // 1: ひろげる, 2: ちぢめる
         let sign: i64 = 
@@ -222,14 +223,16 @@ impl<'a> State<'a> {
             if annealing {
                 // 焼きなましの時
                 let prob = std::f64::consts::E.powf((new_score - self.score) as f64 / temperature);
-                //eprintln!("{} : {} : {}", prob, temperature, new_score - self.score);
+                //eprintln!("{} : {} : {} : {}", i, prob, temperature, new_score - self.score);
                 self.rand.randf() < prob
             } else {
                 // 山登りの時
                 new_score > self.score
             };
 
+        self.chal_idx[i] += 1;
         if upd {
+            self.upd_idx[i] += 1;
             self.cntupd += 1;
             self.score = new_score;
         } else {
@@ -263,7 +266,12 @@ impl<'a> State<'a> {
 
     // idxを選択する確率に用いる、正規化する前の値
     fn calc_prob(&self, i: usize) -> f64 {
-        self.score_v[i].powi(2)
+        //self.score_v[i].powi(2)
+        if self.adv[i].area() - self.r[i] > 0 {
+            0.0
+        } else {
+            1.0 / (self.score_v[i] + 0.0000001)
+        }
     }
 
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
@@ -384,13 +392,14 @@ fn main() {
             std::env::args().nth(2).unwrap().parse().unwrap()
         )
     } else {
+        //(0.008836644575520086, 0.008950549607649214)
         (0.001, 0.0001)
     };
     
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
-    simulate(&mut state, &start, TIME_LIMIT / 30, true, true, true, 100);
+    simulate(&mut state, &start, TIME_LIMIT / 1000, true, false, false, 100);
     simulate(&mut state, &start, TIME_LIMIT / 3 * 2, false, true, false, 10);
     simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
 
@@ -402,12 +411,9 @@ fn main() {
     eprintln!("madiff: {}", state.madiff);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
-    /*
-    eprintln!("upd_idx");
     for i in 0..n {
-        eprintln!("{} : {}", i, state.upd_idx[i]);
+        eprintln!("{} : {} : {} : {}", i, state.upd_idx[i], state.chal_idx[i], state.score_v[i]);
     }
-    */
 
 
     // print answer
