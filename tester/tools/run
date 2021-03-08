@@ -1,2 +1,2 @@
-#!bin/bash
+#!/bin/bash
 cargo run --release --bin vis in/$1.txt out/$1.txt svg/$1.svg > score/$1.txt
