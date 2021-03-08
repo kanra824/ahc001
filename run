@@ -1,4 +1,1 @@
-cargo run < tester/tools/in/$1.txt > tester/tools/out/$1.txt
-cd tester/tools
-cargo run --release --bin vis in/$1.txt out/$1.txt svg/$1.svg
-cd ../..
+cargo run --release $2 $3 < tester/tools/in/$1.txt > tester/tools/out/$1.txt
