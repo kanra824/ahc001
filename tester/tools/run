@@ -1,1 +1,1 @@
-cargo run --release --bin vis in/0000.txt out/0000.txt
+cargo run --release --bin vis in/$1.txt out/$1.txt svg/$1.txt

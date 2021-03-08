@@ -104,6 +104,9 @@ struct State<'a> {
     n: usize,
     rand: Xorshift,
     score: f64,
+    score_v: Vec<f64>,
+    prob_v: Vec<f64>,
+    prob_sum: f64,
     x: &'a Vec<i64>,
     y: &'a Vec<i64>,
     r: &'a Vec<i64>,
@@ -113,6 +116,7 @@ struct State<'a> {
     cntchal: i64,
     midiff: f64,
     madiff: f64,
+    upd_idx: Vec<i64>,
 }
 impl<'a> State<'a> {
     fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>) -> Self {
@@ -120,6 +124,9 @@ impl<'a> State<'a> {
             n: n,
             rand: rand,
             score: 0.0,
+            score_v: vec![0.0; n],
+            prob_v: vec![0.0; n],
+            prob_sum: 0.0,
             x: x,
             y: y,
             r: r,
@@ -129,6 +136,7 @@ impl<'a> State<'a> {
             cntchal: 0,
             midiff: 100000000.0,
             madiff: 0.0,
+            upd_idx: vec![0; n],
         };
         for i in 0..n {
             state.adv[i] = Advertizement{
@@ -142,9 +150,22 @@ impl<'a> State<'a> {
         state
     }
 
-    fn update(&mut self, incr: bool, annealing: bool, temperature: f64, val: i64) {
-        // 変化させるidx
-        let i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+    fn update(&mut self, incr: bool, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
+        // 長方形ごとのスコアに応じて確率を計算
+        let mut i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+        if score_prob {
+            // 変化させるidx
+            let r = self.rand.randf();
+            let mut now = 0.0;
+            for j in 0..self.n {
+                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
+                    i = j;
+                    break;
+                }
+                now += self.prob_v[j] / self.prob_sum;
+            }
+        }
+        self.upd_idx[i] += 1;
         // 変化させる方向
         // 1: ひろげる, 2: ちぢめる
         let sign: i64 = 
@@ -158,22 +179,31 @@ impl<'a> State<'a> {
         // どの辺を操作するか
         let dir = self.dir[dir_idx].clone();
 
-        // 更新後のスコア
-        let mut new_score: f64 = self.score;
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
-        new_score -= self.score(i, self.adv[i].area());
         let mut ok = self.update_adv(i, &dir, sign, val, &mut shrinked);
-        new_score += self.score(i, self.adv[i].area());
+        let mut new_score = self.score;
+        new_score -= self.score_v[i];
+        self.score_v[i] = self.score(i);
+        new_score += self.score_v[i];
+        self.prob_sum -= self.prob_v[i];
+        self.prob_v[i] = self.calc_prob(i);
+        self.prob_sum += self.prob_v[i];
+
 
         // shrinkedの各要素を縮める
         if ok {
             for j in 0..shrinked.len() {
+                let idx = shrinked[j];
                 let ndir = dir.reverse();
                 let mut fake_shrinked: Vec<usize> = Vec::new();
-                new_score -= self.score(shrinked[j], self.adv[shrinked[j]].area());
-                ok &= self.update_adv(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
-                new_score += self.score(shrinked[j], self.adv[shrinked[j]].area());
+                ok &= self.update_adv(idx, &ndir, -1, val, &mut fake_shrinked);
+                new_score -= self.score_v[idx];
+                self.score_v[idx] = self.score(idx);
+                new_score += self.score_v[idx];
+                self.prob_sum -= self.prob_v[idx];
+                self.prob_v[idx] = self.calc_prob(idx);
+                self.prob_sum += self.prob_v[idx];
                 assert_eq!(fake_shrinked.len(), 0);
             }
         }
@@ -212,16 +242,26 @@ impl<'a> State<'a> {
             if self.adv[i].x1 == -1 {
                 continue;
             }
-            let nows = self.adv[i].area();
-            score += self.score(i, nows) as f64;
+            let nowscore = self.score(i) as f64;
+            score += nowscore;
+            self.score_v[i] = nowscore;
+            self.prob_sum -= self.prob_v[i];
+            self.prob_v[i] = self.calc_prob(i);
+            self.prob_sum += self.prob_v[i];
         }
         score
     }
 
     // 広告ひとつのスコアを計算
-    fn score(&self, i: usize, s: i64) -> f64 {
+    fn score(&self, i: usize) -> f64 {
         // 1 - (1 - min(ri, si) / max(ri, si)) ^ 2
+        let s = self.adv[i].area();
         1.0 - (1.0 - cmp::min(self.r[i], s) as f64 / cmp::max(self.r[i], s) as f64).powi(2)
+    }
+
+    // idxを選択する確率に用いる、正規化する前の値
+    fn calc_prob(&self, i: usize) -> f64 {
+        self.score_v[i].powi(2)
     }
 
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
@@ -261,6 +301,10 @@ impl<'a> State<'a> {
             Up => self.adv[i].y1 += sign * val,
             Down => self.adv[i].y2 -= sign * val,
         }
+        self.score_v[i] = self.score(i);
+        self.prob_sum -= self.prob_v[i];
+        self.prob_v[i] = self.calc_prob(i);
+        self.prob_sum += self.prob_v[i];
         let ndir = dir.reverse();
         let mut fake_shrinked = Vec::new();
         for j in 0..shrinked.len() {
@@ -269,24 +313,12 @@ impl<'a> State<'a> {
     }
 }
 
-fn init(state: &mut State, start: &Instant) {
-    let time = TIME_LIMIT / 300;
+fn simulate(state: &mut State, start: &Instant, time_limit: u128, incr: bool, annealing: bool, score_prob: bool, val: i64) {
     let mut elapsed_time = start.elapsed().as_millis();
-    while elapsed_time < time {
+    while elapsed_time < time_limit {
         let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(true, false, temperature, 100);
-        }
-        elapsed_time = start.elapsed().as_millis();
-    }
-}
-
-fn simulate(state: &mut State, start: &Instant) {
-    let mut elapsed_time = start.elapsed().as_millis();
-    while elapsed_time < TIME_LIMIT {
-        let temperature: f64 = START_TMP + (END_TMP - START_TMP) * (elapsed_time as f64) / (TIME_LIMIT as f64);
-        for _ in 0..LOOP_PER_TIME_CHECK {
-            state.update(false, true, temperature, 10);
+            state.update(incr, annealing, score_prob, temperature, val);
         }
         elapsed_time = start.elapsed().as_millis();
     }
@@ -346,8 +378,10 @@ fn main() {
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r);
-    init(&mut state, &start);
-    simulate(&mut state, &start);
+    simulate(&mut state, &start, TIME_LIMIT / 30, true, true, true, 100);
+    simulate(&mut state, &start, TIME_LIMIT / 3 * 2, false, true, false, 10);
+    simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
+
 
     let mul = 1000000000;
     eprintln!("cntchal: {}", state.cntchal);
@@ -356,6 +390,12 @@ fn main() {
     eprintln!("madiff: {}", state.madiff);
     eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
     eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
+    /*
+    eprintln!("upd_idx");
+    for i in 0..n {
+        eprintln!("{} : {}", i, state.upd_idx[i]);
+    }
+    */
 
 
     // print answer
