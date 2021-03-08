@@ -105,6 +105,8 @@ struct State<'a> {
     rand: Xorshift,
     score: f64,
     score_v: Vec<f64>,
+    prob_v: Vec<f64>,
+    prob_sum: f64,
     x: &'a Vec<i64>,
     y: &'a Vec<i64>,
     r: &'a Vec<i64>,
@@ -123,6 +125,8 @@ impl<'a> State<'a> {
             rand: rand,
             score: 0.0,
             score_v: vec![0.0; n],
+            prob_v: vec![0.0; n],
+            prob_sum: 0.0,
             x: x,
             y: y,
             r: r,
@@ -150,26 +154,15 @@ impl<'a> State<'a> {
         // 長方形ごとのスコアに応じて確率を計算
         let mut i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
         if score_prob {
-            let mut p: Vec<f64> = vec![0.0; self.n+1];
-            let mut su = 0.0;
-            for i in 0..self.n {
-                let val = self.score_v[i].powi(2);
-                su += val;
-                p[i+1] = val;
-            }
-            for i in 1..self.n+1 {
-                p[i] /= su;
-                if i != 0 {
-                    p[i] += p[i-1];
-                }
-            }
             // 変化させるidx
             let r = self.rand.randf();
+            let mut now = 0.0;
             for j in 0..self.n {
-                if p[j] <= r && r < p[j+1] {
+                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
                     i = j;
                     break;
                 }
+                now += self.prob_v[j] / self.prob_sum;
             }
         }
         self.upd_idx[i] += 1;
@@ -188,29 +181,32 @@ impl<'a> State<'a> {
 
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
-        self.score_v[i] -= self.score(i);
         let mut ok = self.update_adv(i, &dir, sign, val, &mut shrinked);
-        self.score_v[i] += self.score(i);
+        let mut new_score = self.score;
+        new_score -= self.score_v[i];
+        self.score_v[i] = self.score(i);
+        new_score += self.score_v[i];
+        self.prob_sum -= self.prob_v[i];
+        self.prob_v[i] = self.calc_prob(i);
+        self.prob_sum += self.prob_v[i];
 
 
         // shrinkedの各要素を縮める
         if ok {
             for j in 0..shrinked.len() {
+                let idx = shrinked[j];
                 let ndir = dir.reverse();
                 let mut fake_shrinked: Vec<usize> = Vec::new();
-                self.score_v[shrinked[j]] -= self.score(shrinked[j]);
-                ok &= self.update_adv(shrinked[j], &ndir, -1, val, &mut fake_shrinked);
-                self.score_v[shrinked[j]] += self.score(shrinked[j]);
+                ok &= self.update_adv(idx, &ndir, -1, val, &mut fake_shrinked);
+                new_score -= self.score_v[idx];
+                self.score_v[idx] = self.score(idx);
+                new_score += self.score_v[idx];
+                self.prob_sum -= self.prob_v[idx];
+                self.prob_v[idx] = self.calc_prob(idx);
+                self.prob_sum += self.prob_v[idx];
                 assert_eq!(fake_shrinked.len(), 0);
             }
         }
-        /*
-        let mut new_score = 0.0;
-        for i in 0..self.n {
-            new_score += self.score_v[i];
-        }
-        */
-        let new_score = self.score_all();
         let diff = new_score - self.score;
 
         self.cntchal += 1;
@@ -246,7 +242,12 @@ impl<'a> State<'a> {
             if self.adv[i].x1 == -1 {
                 continue;
             }
-            score += self.score(i) as f64;
+            let nowscore = self.score(i) as f64;
+            score += nowscore;
+            self.score_v[i] = nowscore;
+            self.prob_sum -= self.prob_v[i];
+            self.prob_v[i] = self.calc_prob(i);
+            self.prob_sum += self.prob_v[i];
         }
         score
     }
@@ -256,6 +257,11 @@ impl<'a> State<'a> {
         // 1 - (1 - min(ri, si) / max(ri, si)) ^ 2
         let s = self.adv[i].area();
         1.0 - (1.0 - cmp::min(self.r[i], s) as f64 / cmp::max(self.r[i], s) as f64).powi(2)
+    }
+
+    // idxを選択する確率に用いる、正規化する前の値
+    fn calc_prob(&self, i: usize) -> f64 {
+        self.score_v[i].powi(2)
     }
 
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
@@ -289,14 +295,16 @@ impl<'a> State<'a> {
 
     // dir, sign, valはupdate_advの時と同じ値であることに注意
     fn revert(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &Vec<usize>) {
-        self.score_v[i] -= self.score(i);
         match dir {
             Left => self.adv[i].x1 += sign * val,
             Right => self.adv[i].x2 -= sign * val,
             Up => self.adv[i].y1 += sign * val,
             Down => self.adv[i].y2 -= sign * val,
         }
-        self.score_v[i] += self.score(i);
+        self.score_v[i] = self.score(i);
+        self.prob_sum -= self.prob_v[i];
+        self.prob_v[i] = self.calc_prob(i);
+        self.prob_sum += self.prob_v[i];
         let ndir = dir.reverse();
         let mut fake_shrinked = Vec::new();
         for j in 0..shrinked.len() {
@@ -372,7 +380,7 @@ fn main() {
     let mut state = State::new(n, rand, &x, &y, &r);
     simulate(&mut state, &start, TIME_LIMIT / 30, true, true, true, 100);
     simulate(&mut state, &start, TIME_LIMIT / 3 * 2, false, true, false, 10);
-    simulate(&mut state, &start, TIME_LIMIT / 5 * 4, true, false, true, 10);
+    simulate(&mut state, &start, TIME_LIMIT, true, false, true, 10);
 
 
     let mul = 1000000000;
