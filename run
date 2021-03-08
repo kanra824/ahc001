@@ -1,1 +1,2 @@
+#!/bin/bash
 cargo run --release $2 $3 < tester/tools/in/$1.txt > tester/tools/out/$1.txt
