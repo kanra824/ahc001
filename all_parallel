@@ -2,9 +2,9 @@ cargo build
 
 sz=50
 
-for ((i=0;i<10; i++))
+for ((i=0;i<25; i++))
 do
-for ((j=$((5 * $i));j<$((5 * ($i + 1)));j++))
+for ((j=$((2 * $i));j<$((2 * ($i + 1)));j++))
 do
 echo $j
 num=$(printf "%04d" $j)
