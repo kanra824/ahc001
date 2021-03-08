@@ -1,23 +1,30 @@
-cargo build
-cd tester/tools
-cargo build --bin vis
-cd ../..
+#!/bin/bash
+cargo build --release
 
-
-sz=50
+sz1=1
+sz2=2
 sum=0
 
-for ((i=0;i<$sz;i++))
+for((i=0;i<$sz1;i++))
 do
-echo $i
-num=$(printf "%04d" $i)
-./target/debug/main < tester/tools/in/$num.txt > tester/tools/out/$num.txt
+for((j=$(($sz2 * $i));j<$(($sz2 * ($i+1)));j++))
+do
+echo $j >&2
+num=$(printf "%04d" $j)
+./target/release/main $1 $2 < tester/tools/in/$num.txt > tester/tools/out/$num.txt &
+done
+wait
+done
+
 cd tester/tools
-./target/debug/vis in/$num.txt out/$num.txt svg/$num.svg > score/$num.txt
+for ((i=0;i<$(($sz1 * $sz2));i++))
+do
+num=$(printf "%04d" $i)
+./run $num
 add=`cat score/$num.txt`
 sum=$(( $sum + $add ))
-cd ../..
 done
+cd ../..
 
 echo $sum
 
