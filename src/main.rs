@@ -418,6 +418,55 @@ fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, si
     Ok(())
 }
 
+fn iterate(state: &mut State, start: &Instant, num: &String, time_limit: u128) -> Result<(), Box<dyn std::error::Error>> {
+    let mut pos = 0;
+    /*
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
+    */
+
+    let mut sorted = vec![(0, 0); state.n];
+    for i in 0..state.n {
+        sorted[i] = (state.r[i], i);
+    }
+    sorted.sort();
+
+    /*
+    // 面積が大きい方から合わせる
+    for i in 0..n {
+        let idx = sorted[n-i-1].1;
+        state.threshold = 1.0;
+        for j in 0..state.n {
+            state.prob_v[j] = 0.0;
+        }
+        state.prob_v[idx] = 1.0;
+        state.prob_sum = 1.0;
+        for _ in 0..1000 {
+            state.update(1, true, true, 0.0, 10);
+        }
+    }
+    */
+
+    // 序盤は平均的に増えるようにする
+    for i in 1..11 {
+        state.threshold = i as f64 * 0.1;
+        for j in 0..state.n {
+            state.prob_v[j] = 1.0 / state.n as f64;
+        }
+        state.prob_sum = 1.0;
+        simulate_with_output(state, &start, time_limit / 100 * i as u128, 1, true, true, 10, &num, &mut pos)?;
+    }
+
+    // 焼きなまし
+    simulate_with_output(state, &start, time_limit / 100 * 99, 0, true, false, 10, &num, &mut pos)?;
+
+    // スコアの低いものを重点的に選択
+    simulate_with_output(state, &start, time_limit, 1, false, true, 1, &num, &mut pos)?;
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
@@ -469,7 +518,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = x.len();
 
-    eprintln!("{}", std::env::args().len());
     let num =
     if std::env::args().len() >= 2 {
         std::env::args().nth(1).unwrap()
@@ -492,48 +540,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
-    let mut pos = 0;
-    /*
-    simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
-    simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
-    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
-    */
-
-    let mut sorted = vec![(0, 0); n];
-    for i in 0..n {
-        sorted[i] = (state.r[i], i);
-    }
-    sorted.sort();
-
-    /*
-    // 面積が大きい方から合わせる
-    for i in 0..n {
-        let idx = sorted[n-i-1].1;
-        state.threshold = 1.0;
-        for j in 0..state.n {
-            state.prob_v[j] = 0.0;
-        }
-        state.prob_v[idx] = 1.0;
-        state.prob_sum = 1.0;
-        for _ in 0..1000 {
-            state.update(1, false, true, 0.0, 10);
-        }
-    }
-    */
-
-    for i in 1..11 {
-        state.threshold = i as f64 * 0.1;
-        for j in 0..state.n {
-            state.prob_v[j] = 1.0 / n as f64;
-        }
-        state.prob_sum = 1.0;
-        simulate_with_output(&mut state, &start, TIME_LIMIT / 100 * i as u128, 1, true, true, 10, &num, &mut pos)?;
-    }
-
-    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, true, false, 10, &num, &mut pos)?;
-
-
-
+    iterate(&mut state, &start, &num, TIME_LIMIT)?;
     let mul = 1000000000;
     eprintln!("cntchal: {}", state.cntchal);
     eprintln!("cntupd: {}", state.cntupd);
