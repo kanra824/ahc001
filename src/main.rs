@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{Write};
 use Direction::*;
 
-const TIME_LIMIT: u128 = 400;
+const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 1;
 const SZ: i64 = 10000;
 const OUTPUT_NUM: u128 = 100;
@@ -166,6 +166,15 @@ impl<'a> State<'a> {
         if score_prob {
             // 変化させるidx
             let r = self.rand.randf();
+            /*
+            if r < 0.001 {
+                let mut su = 0.0;
+                for j in 0..self.n {
+                    su += self.prob_v[j];
+                }
+                eprintln!("{} : {}", su, self.prob_sum);
+            }
+            */
             let mut now = 0.0;
             for j in 0..self.n {
                 if now <= r && r < now + self.prob_v[j] / self.prob_sum {
@@ -192,13 +201,14 @@ impl<'a> State<'a> {
         // 指定がなければ確率でちぢめてひろげる
         if sign == 0 {
             let p = self.rand.randf();
-            sign = if p < 0.4 {
-                1
-            } else if p < 0.4 {
-                -1
-            } else {
-                0
-            }
+            sign =
+                if p < 0.2 {
+                    0
+                } else if self.adv[i].area() < self.r[i] {
+                    1
+                } else {
+                    -1
+                }
         }
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
@@ -303,8 +313,8 @@ impl<'a> State<'a> {
     // idxを選択する確率に用いる、正規化する前の値
     fn calc_prob(&mut self, i: usize) -> f64 {
         let p = self.rand.randf();
-        if p < 0.3 {
-            eprintln!("{} : {}", self.score_v[i], self.threshold);
+        if p < 0.001 {
+            //eprintln!("{} : {}", self.score_v[i], self.threshold);
         }
         if self.score_v[i] < self.threshold {
             if self.adv[i].area() > self.r[i] {
@@ -390,10 +400,6 @@ fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, si
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
-            let p = state.rand.randf();
-            if p < 0.0001 {
-                eprintln!("{}", state.threshold);
-            }
             state.update(sign, annealing, score_prob, temperature, val);
         }
         elapsed_time = start.elapsed().as_millis();
@@ -478,8 +484,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     } else {
         //(0.008836644575520086, 0.008950549607649214) // optuna
-        (0.0006979039523455251, 0.01290817137136288) // 479
-        //(0.001, 0.0001)
+        //(0.0006979039523455251, 0.01290817137136288) // 479
+        (0.001, 0.0001)
     };
     
     let seed = start.elapsed().as_nanos() as u64;
@@ -492,10 +498,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
     */
 
+    let mut sorted = vec![(0, 0); n];
+    for i in 0..n {
+        sorted[i] = (state.r[i], i);
+    }
+    sorted.sort();
+
+    /*
+    // 面積が大きい方から合わせる
+    for i in 0..n {
+        let idx = sorted[n-i-1].1;
+        state.threshold = 1.0;
+        for j in 0..state.n {
+            state.prob_v[j] = 0.0;
+        }
+        state.prob_v[idx] = 1.0;
+        state.prob_sum = 1.0;
+        for _ in 0..1000 {
+            state.update(1, false, true, 0.0, 10);
+        }
+    }
+    */
+
     for i in 1..11 {
         state.threshold = i as f64 * 0.1;
-        simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * i as u128, 1, true, true, 10, &num, &mut pos)?;
+        for j in 0..state.n {
+            state.prob_v[j] = 1.0 / n as f64;
+        }
+        state.prob_sum = 1.0;
+        simulate_with_output(&mut state, &start, TIME_LIMIT / 100 * i as u128, 1, true, true, 10, &num, &mut pos)?;
     }
+
+    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, true, false, 10, &num, &mut pos)?;
 
 
 
