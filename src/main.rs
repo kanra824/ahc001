@@ -9,7 +9,7 @@ use Direction::*;
 const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 100;
 const SZ: i64 = 10000;
-const OUTPUT_NUM: u128 = 3;
+const OUTPUT_NUM: u128 = 100;
 
 #[derive(Clone)]
 pub enum Direction {
