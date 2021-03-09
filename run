@@ -1,4 +1,5 @@
 #!/bin/bash
+mkdir -p tester/tools/out/result
 cargo run --release $1 $2 $3 < tester/tools/in/$1.txt > tester/tools/out/result/$1.txt
 cd tester/tools
 ./run $1
