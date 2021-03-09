@@ -384,7 +384,7 @@ impl<'a> State<'a> {
     }
 }
 
-fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
+fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -395,7 +395,7 @@ fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, an
     }
 }
 
-fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
+fn _simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -527,10 +527,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             state.prob_v[j] = 1.0 / n as f64;
         }
         state.prob_sum = 1.0;
-        simulate_with_output(&mut state, &start, TIME_LIMIT / 100 * i as u128, 1, true, true, 10, &num, &mut pos)?;
+        simulate(&mut state, &start, TIME_LIMIT / 100 * i as u128, 1, true, true, 10, &num, &mut pos);
     }
 
-    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, true, false, 10, &num, &mut pos)?;
+    simulate(&mut state, &start, TIME_LIMIT, 0, true, false, 10, &num, &mut pos);
 
 
 
