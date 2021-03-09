@@ -2,7 +2,7 @@
 rm -rf tester/tools/out/$1
 mkdir -p tester/tools/out/$1
 mkdir -p tester/tools/out/result
-cargo run --release $1 $2 $3 < tester/tools/in/$1.txt > tester/tools/out/result/$1.txt
+cargo run --release --bin main $1 $2 $3 < tester/tools/in/$1.txt > tester/tools/out/result/$1.txt
 cd tester/tools
 ./run $1
 cd ../..
