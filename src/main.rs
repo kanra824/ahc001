@@ -291,13 +291,14 @@ impl<'a> State<'a> {
     }
 
     // 10^9をかける手前までのスコアを計算
-    fn score_all(&self) -> f64 {
+    fn score_all(&mut self) -> f64 {
         let mut score: f64 = 0.0;
         for i in 0..self.n {
             if self.adv[i].x1 == -1 {
                 continue;
             }
             let nowscore = self.score(i) as f64;
+            self.score_v[i] = nowscore;
             score += nowscore;
         }
         score
@@ -384,7 +385,7 @@ impl<'a> State<'a> {
     }
 }
 
-fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
+fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -395,7 +396,7 @@ fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, an
     }
 }
 
-fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
+fn _simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -415,6 +416,62 @@ fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, si
         }
     }
 
+    Ok(())
+}
+
+fn iterate(state: &mut State, start: &Instant, num: &String, pos: &mut u128, time_limit: u128) -> Result<(), Box<dyn std::error::Error>> {
+    let now = start.elapsed().as_millis() as u128;
+    /*
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
+    */
+
+    let mut sorted = vec![(0, 0); state.n];
+    for i in 0..state.n {
+        sorted[i] = (state.r[i], i);
+    }
+    sorted.sort();
+
+    /*
+    // 面積が大きい方から合わせる
+    for i in 0..n {
+        let idx = sorted[n-i-1].1;
+        state.threshold = 1.0;
+        for j in 0..state.n {
+            state.prob_v[j] = 0.0;
+        }
+        state.prob_v[idx] = 1.0;
+        state.prob_sum = 1.0;
+        for _ in 0..1000 {
+            state.update(1, true, true, 0.0, 10);
+        }
+    }
+    */
+
+    //eprintln!("time before: {} : {}", now, time_limit);
+    // 序盤は平均的に増えるようにする
+    for i in 1..11 {
+        state.threshold = i as f64 * 0.1;
+        for j in 0..state.n {
+            state.prob_v[j] = 1.0 / state.n as f64;
+        }
+        state.prob_sum = 1.0;
+        state.threshold = i as f64 * 0.1;
+        for j in 0..state.n {
+            state.prob_v[j] = 1.0 / state.n as f64;
+        }
+        state.prob_sum = 1.0;
+        simulate(state, &start, now + (time_limit - now) / 100 * i as u128, 1, true, true, 10, &num, pos);
+    }
+
+    // 焼きなまし
+    simulate(state, &start, now + (time_limit - now) / 100 * 99, 0, true, false, 10, &num, pos);
+
+    // スコアの低いものを重点的に選択
+    simulate(state, &start, now + (time_limit - now), 1, false, true, 1, &num, pos);
+
+    //eprintln!("time after: {} : {}", now, time_limit);
     Ok(())
 }
 
@@ -469,7 +526,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = x.len();
 
-    eprintln!("{}", std::env::args().len());
     let num =
     if std::env::args().len() >= 2 {
         std::env::args().nth(1).unwrap()
@@ -484,74 +540,89 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::env::args().nth(3).unwrap().parse().unwrap()
         )
     } else {
-        //(0.008836644575520086, 0.008950549607649214) // optuna
+        (0.0004192819110239674, 0.004052258255976939) // optuna
         //(0.0006979039523455251, 0.01290817137136288) // 479
-        (0.001, 0.0001)
+        //(0.001, 0.0001)
     };
     
-    let seed = start.elapsed().as_nanos() as u64;
-    let rand = Xorshift::with_seed(seed);
-    let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
+    let mut ans_score = 0.0;
+    let mut ans_adv: Vec<Advertizement> = Vec::new();
+    //iterate(&mut state, &start, &num, TIME_LIMIT)?;
     let mut pos = 0;
-    /*
-    simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
-    simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
-    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
-    */
-
-    let mut sorted = vec![(0, 0); n];
-    for i in 0..n {
-        sorted[i] = (state.r[i], i);
-    }
-    sorted.sort();
-
-    /*
-    // 面積が大きい方から合わせる
-    for i in 0..n {
-        let idx = sorted[n-i-1].1;
+    let mut priority: Vec<usize> = Vec::new();
+    for i in 0..10 {
+        let seed = start.elapsed().as_nanos() as u64;
+        let rand = Xorshift::with_seed(seed);
+        let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
         state.threshold = 1.0;
-        for j in 0..state.n {
-            state.prob_v[j] = 0.0;
+        
+        let time_limit = TIME_LIMIT / 10 * (i + 1);
+
+        for j in &priority {
+            let idx = *j;
+            //eprintln!("idx: {}", idx);
+            state.threshold = 1.0;
+            for k in 0..state.n {
+                state.prob_v[k] = 0.0;
+            }
+            state.prob_v[idx] = 1.0;
+            state.prob_sum = 1.0;
+            let now = start.elapsed().as_millis() as u128;
+            simulate(&mut state, &start, now + (time_limit - now) / 100 * i , 1, false, true, 100, &num, &mut pos);
         }
-        state.prob_v[idx] = 1.0;
-        state.prob_sum = 1.0;
-        for _ in 0..1000 {
-            state.update(1, false, true, 0.0, 10);
+
+        let now = start.elapsed().as_millis() as u128;
+        iterate(&mut state, &start, &num, &mut pos, now + (time_limit - now) / 10 * (i+1))?;
+
+        if ans_score < state.score {
+            ans_score = state.score;
+            ans_adv = state.adv.clone();
+
+            let mut sorted = vec![(0.0, 0);state.n];
+            for i in 0..state.n {
+                sorted[i] = (state.score_v[i], i);
+            }
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            priority.clear();
+            for i in 0..cmp::min(3, state.n) {
+                if sorted[i].0 < 0.6 {
+                    priority.push(sorted[i].1);
+                }
+            }
         }
+        /*
+        eprint!("priority");
+        for i in 0..priority.len() {
+            eprint!(", {}", priority[i]);
+        }
+        eprintln!("");
+        */
+
+
+        // デバッグ出力
+        //let mul = 1000000000;
+        //eprintln!("cntchal: {}", state.cntchal);
+        //eprintln!("cntupd: {}", state.cntupd);
+        //eprintln!("midiff: {}", state.midiff);
+        //eprintln!("madiff: {}", state.madiff);
+        //eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
+        //eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
+        /*
+        for i in 0..n {
+            eprintln!("{} : {} : {} : {}", i, state.upd_idx[i], state.chal_idx[i], state.score_v[i]);
+        }
+        */
     }
-    */
-
-    for i in 1..11 {
-        state.threshold = i as f64 * 0.1;
-        for j in 0..state.n {
-            state.prob_v[j] = 1.0 / n as f64;
-        }
-        state.prob_sum = 1.0;
-        simulate_with_output(&mut state, &start, TIME_LIMIT / 100 * i as u128, 1, true, true, 10, &num, &mut pos)?;
-    }
-
-    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, true, false, 10, &num, &mut pos)?;
-
-
 
     let mul = 1000000000;
-    eprintln!("cntchal: {}", state.cntchal);
-    eprintln!("cntupd: {}", state.cntupd);
-    //eprintln!("midiff: {}", state.midiff);
-    //eprintln!("madiff: {}", state.madiff);
-    eprintln!("saved score: {}", state.score / n as f64 * mul as f64);
-    eprintln!("calculated score: {}", state.score_all() / n as f64 * mul as f64);
-    /*
-    for i in 0..n {
-        eprintln!("{} : {} : {} : {}", i, state.upd_idx[i], state.chal_idx[i], state.score_v[i]);
-    }
-    */
+    eprintln!("ans score: {}", ans_score / n as f64 * mul as f64);
 
 
     // print answer
     if n == in_n {
         for i in 0..n {
-            println!("{}", state.adv[i]);
+            println!("{}", ans_adv[i]);
         }
     } else {
         panic!("入力に同じ(x, y)が存在")

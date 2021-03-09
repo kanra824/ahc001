@@ -6,7 +6,7 @@ sz1=25
 sz2=2
 sum=0
 
-echo "run"
+echo "run" >&2
 
 for((i=0;i<$sz1;i++))
 do
@@ -21,14 +21,14 @@ done
 wait
 done
 
-echo ""
-echo "visualize"
+echo "" >&2
+echo "visualize" >&2
 
 cd tester/tools
 for ((i=0;i<$(($sz1 * $sz2));i++))
 do
 num=$(printf "%04d" $i)
-echo $num
+echo $num >&2
 ./run $num &> /dev/null
 add=`cat score/$num.txt`
 sum=$(( $sum + $add ))
