@@ -1,4 +1,5 @@
 #!/bin/bash
 cargo run --release $1 $2 $3 < tester/tools/in/$1.txt > tester/tools/out/result/$1.txt
 cd tester/tools
-cargo run --release --bin vis in/$1.txt out/result/$1.txt svg/result/$1.svg
+./run $1
+cd ../..

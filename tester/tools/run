@@ -1,2 +1,14 @@
 #!/bin/bash
-cargo run --release --bin vis in/$1.txt out/result/$1.txt svg/$1.svg > score/$1.txt
+cargo run --release --bin vis in/$1.txt out/result/$1.txt svg/result/$1.svg > score/$1.txt
+
+if [ -n "$1" ]; then
+sz=`ls out/$1 | wc -w`
+
+rm -r svg/$1
+mkdir svg/$1
+
+for((i=0;i<$sz;i++))
+do
+cargo run --release --bin vis in/$1.txt out/$1/$i.txt svg/$1/$i.svg > /dev/null
+done
+fi
