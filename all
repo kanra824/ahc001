@@ -11,7 +11,7 @@ for((j=$(($sz2 * $i));j<$(($sz2 * ($i+1)));j++))
 do
 echo $j >&2
 num=$(printf "%04d" $j)
-./target/release/main $1 $2 < tester/tools/in/$num.txt > tester/tools/out/$num.txt &
+./target/release/main $num $1 $2 < tester/tools/in/$num.txt > tester/tools/out/$num.txt &
 done
 wait
 done

@@ -441,11 +441,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = x.len();
 
+    let num =
+    if std::env::args().len() >= 1 {
+        std::env::args().nth(1).unwrap()
+    } else {
+        "0000".to_string()
+    };
+
     let (start_time, end_time) =
-    if std::env::args().len() >= 2 {
+    if std::env::args().len() >= 3 {
         (
-            std::env::args().nth(1).unwrap().parse().unwrap(),
-            std::env::args().nth(2).unwrap().parse().unwrap()
+            std::env::args().nth(2).unwrap().parse().unwrap(),
+            std::env::args().nth(3).unwrap().parse().unwrap()
         )
     } else {
         //(0.008836644575520086, 0.008950549607649214) // optuna
@@ -457,7 +464,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
     let mut pos = 0;
-    let num = "0000".to_string();
     simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
     simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
     simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
