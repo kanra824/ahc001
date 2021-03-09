@@ -6,8 +6,8 @@ use std::fs::File;
 use std::io::{Write};
 use Direction::*;
 
-const TIME_LIMIT: u128 = 4900;
-const LOOP_PER_TIME_CHECK: usize = 100;
+const TIME_LIMIT: u128 = 400;
+const LOOP_PER_TIME_CHECK: usize = 1;
 const SZ: i64 = 10000;
 const OUTPUT_NUM: u128 = 100;
 
@@ -121,6 +121,7 @@ struct State<'a> {
     madiff: f64,
     chal_idx: Vec<i64>,
     upd_idx: Vec<i64>,
+    threshold: f64,
 }
 impl<'a> State<'a> {
     fn new(n: usize, rand: Xorshift, x: &'a Vec<i64>, y: &'a Vec<i64>, r: &'a Vec<i64>, start_tmp: f64, end_tmp: f64) -> Self {
@@ -131,8 +132,8 @@ impl<'a> State<'a> {
             rand: rand,
             score: 0.0,
             score_v: vec![0.0; n],
-            prob_v: vec![0.0; n],
-            prob_sum: 0.0,
+            prob_v: vec![1.0 / n as f64; n],
+            prob_sum: 1.0,
             x: x,
             y: y,
             r: r,
@@ -144,6 +145,7 @@ impl<'a> State<'a> {
             madiff: 0.0,
             chal_idx: vec![0; n],
             upd_idx: vec![0; n],
+            threshold: 0.0,
         };
         for i in 0..n {
             state.adv[i] = Advertizement{
@@ -159,7 +161,8 @@ impl<'a> State<'a> {
 
     fn update(&mut self, mut sign: i64, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
         // 長方形ごとのスコアに応じて確率を計算
-        let mut i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+        let inf = 1000000000;
+        let mut i = inf;
         if score_prob {
             // 変化させるidx
             let r = self.rand.randf();
@@ -171,6 +174,11 @@ impl<'a> State<'a> {
                 }
                 now += self.prob_v[j] / self.prob_sum;
             }
+        } else {
+            i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+        }
+        if i == inf {
+            return;
         }
         
         let dir_idx = self.rand.rand_int(0, 3) as usize;
@@ -273,7 +281,7 @@ impl<'a> State<'a> {
     }
 
     // 10^9をかける手前までのスコアを計算
-    fn score_all(&mut self) -> f64 {
+    fn score_all(&self) -> f64 {
         let mut score: f64 = 0.0;
         for i in 0..self.n {
             if self.adv[i].x1 == -1 {
@@ -281,10 +289,6 @@ impl<'a> State<'a> {
             }
             let nowscore = self.score(i) as f64;
             score += nowscore;
-            self.score_v[i] = nowscore;
-            self.prob_sum -= self.prob_v[i];
-            self.prob_v[i] = self.calc_prob(i);
-            self.prob_sum += self.prob_v[i];
         }
         score
     }
@@ -297,13 +301,26 @@ impl<'a> State<'a> {
     }
 
     // idxを選択する確率に用いる、正規化する前の値
-    fn calc_prob(&self, i: usize) -> f64 {
-        self.score_v[i].powi(2)
+    fn calc_prob(&mut self, i: usize) -> f64 {
+        let p = self.rand.randf();
+        if p < 0.3 {
+            eprintln!("{} : {}", self.score_v[i], self.threshold);
+        }
+        if self.score_v[i] < self.threshold {
+            if self.adv[i].area() > self.r[i] {
+                0.0
+            } else {
+                1.0 - self.score_v[i].powi(2)
+            }
+        } else {
+            0.0
+        }
+
         /*
-        if self.adv[i].area() - self.r[i] > 0 {
+        if self.adv[i].area() > self.r[i] {
             0.0
         } else {
-            1.0 / (self.score_v[i] + 0.0000001)
+            1.0 - self.score_v[i].powi(10)
         }
         */
     }
@@ -373,11 +390,16 @@ fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, si
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
         for _ in 0..LOOP_PER_TIME_CHECK {
+            let p = state.rand.randf();
+            if p < 0.0001 {
+                eprintln!("{}", state.threshold);
+            }
             state.update(sign, annealing, score_prob, temperature, val);
         }
         elapsed_time = start.elapsed().as_millis();
 
-        if elapsed_time > TIME_LIMIT / OUTPUT_NUM * *pos {
+        if *pos < OUTPUT_NUM && elapsed_time > TIME_LIMIT / OUTPUT_NUM * *pos {
+            assert!(*pos < 100);
             let path = format!("./tester/tools/out/{}/{}.txt", num, pos);
             let mut file = File::create(path)?;
             for adv in &state.adv {
@@ -464,9 +486,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
     let mut pos = 0;
+    /*
     simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
     simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
     simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
+    */
+
+    for i in 1..11 {
+        state.threshold = i as f64 * 0.1;
+        simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * i as u128, 1, true, true, 10, &num, &mut pos)?;
+    }
+
 
 
     let mul = 1000000000;
