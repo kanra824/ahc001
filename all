@@ -20,7 +20,7 @@ cd tester/tools
 for ((i=0;i<$(($sz1 * $sz2));i++))
 do
 num=$(printf "%04d" $i)
-./run $num
+./run $num &> /dev/null
 add=`cat score/$num.txt`
 sum=$(( $sum + $add ))
 done
