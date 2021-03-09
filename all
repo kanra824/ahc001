@@ -14,6 +14,8 @@ for((j=$(($sz2 * $i));j<$(($sz2 * ($i+1)));j++))
 do
 echo $j >&2
 num=$(printf "%04d" $j)
+rm -rf tester/tools/out/$num
+mkdir -p tester/tools/out/$num
 ./target/release/main $num $1 $2 < tester/tools/in/$num.txt > tester/tools/out/result/$num.txt &
 done
 wait
