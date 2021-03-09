@@ -469,15 +469,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = x.len();
 
+    eprintln!("{}", std::env::args().len());
     let num =
-    if std::env::args().len() >= 1 {
+    if std::env::args().len() >= 2 {
         std::env::args().nth(1).unwrap()
     } else {
         "0000".to_string()
     };
 
     let (start_time, end_time) =
-    if std::env::args().len() >= 3 {
+    if std::env::args().len() >= 4 {
         (
             std::env::args().nth(2).unwrap().parse().unwrap(),
             std::env::args().nth(3).unwrap().parse().unwrap()
