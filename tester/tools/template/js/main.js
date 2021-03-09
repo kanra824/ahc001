@@ -1,8 +1,10 @@
 let i = 0;
 let j = 0;
 let sz = 100;
-let image = document.getElementById('image');
-let seek = document.getElementById('seek');
+const image = document.getElementById('image');
+const seek = document.getElementById('seek');
+
+let load_img;
 update_image();
 
 // ページャ
@@ -27,6 +29,7 @@ function preload_images() {
         ch.src = path;
         tmp.appendChild(ch);
     }
+    load_img = tmp;
 }
 
 function unload_images() {
