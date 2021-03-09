@@ -5,11 +5,13 @@
 		<title>AHC001</title>
 	</head>
 	<body>
+		<h2>何度もページ遷移するとメモリを食いつくすかもしれません！！！</h2>
 	    <button type="button" onclick="Prev();">prev</button>
 		<button type="button" onclick="Next();">next</button>
 		<div id='page'>
 		</div>
-		<div id='home'>
+		<input type="range" min="0" max="99" step="1" value="0" id="seek">
+		<div id='image'>
 		</div>
 		<script src="./js/main.js"></script>
 	</body>

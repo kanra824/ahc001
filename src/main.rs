@@ -2,12 +2,14 @@ use proconio::input;
 use std::time::Instant;
 use std::cmp;
 use std::fmt;
-use std::collections::HashSet;
+use std::fs::File;
+use std::io::{Write};
 use Direction::*;
 
 const TIME_LIMIT: u128 = 4900;
 const LOOP_PER_TIME_CHECK: usize = 100;
 const SZ: i64 = 10000;
+const OUTPUT_NUM: u128 = 100;
 
 #[derive(Clone)]
 pub enum Direction {
@@ -355,7 +357,7 @@ impl<'a> State<'a> {
     }
 }
 
-fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64) {
+fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -366,7 +368,29 @@ fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, ann
     }
 }
 
-fn main() {
+fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
+    let mut elapsed_time = start.elapsed().as_millis();
+    while elapsed_time < time_limit {
+        let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
+        for _ in 0..LOOP_PER_TIME_CHECK {
+            state.update(sign, annealing, score_prob, temperature, val);
+        }
+        elapsed_time = start.elapsed().as_millis();
+
+        if elapsed_time > TIME_LIMIT / OUTPUT_NUM * *pos {
+            let path = format!("./tester/tools/out/{}/{}.txt", num, pos);
+            let mut file = File::create(path)?;
+            for adv in &state.adv {
+                writeln!(file, "{}", adv)?;
+            }
+            *pos += 1;
+        }
+    }
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     input! {
@@ -417,11 +441,18 @@ fn main() {
 
     let n = x.len();
 
+    let num =
+    if std::env::args().len() >= 1 {
+        std::env::args().nth(1).unwrap()
+    } else {
+        "0000".to_string()
+    };
+
     let (start_time, end_time) =
-    if std::env::args().len() >= 2 {
+    if std::env::args().len() >= 3 {
         (
-            std::env::args().nth(1).unwrap().parse().unwrap(),
-            std::env::args().nth(2).unwrap().parse().unwrap()
+            std::env::args().nth(2).unwrap().parse().unwrap(),
+            std::env::args().nth(3).unwrap().parse().unwrap()
         )
     } else {
         //(0.008836644575520086, 0.008950549607649214) // optuna
@@ -432,9 +463,10 @@ fn main() {
     let seed = start.elapsed().as_nanos() as u64;
     let rand = Xorshift::with_seed(seed);
     let mut state = State::new(n, rand, &x, &y, &r, start_time, end_time);
-    simulate(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100);
-    simulate(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10);
-    simulate(&mut state, &start, TIME_LIMIT, 0, false, true, 10);
+    let mut pos = 0;
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 30, 1, false, false, 100, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT / 10 * 9, 0, true, false, 10, &num, &mut pos)?;
+    simulate_with_output(&mut state, &start, TIME_LIMIT, 0, false, true, 10, &num, &mut pos)?;
 
 
     let mul = 1000000000;
@@ -460,4 +492,5 @@ fn main() {
         panic!("入力に同じ(x, y)が存在")
     }
 
+    Ok(())
 }

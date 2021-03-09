@@ -1,9 +1,12 @@
 #!/bin/bash
 cargo build --release
+mkdir -p tester/tools/out/result
 
 sz1=25
 sz2=2
 sum=0
+
+echo "run"
 
 for((i=0;i<$sz1;i++))
 do
@@ -11,16 +14,20 @@ for((j=$(($sz2 * $i));j<$(($sz2 * ($i+1)));j++))
 do
 echo $j >&2
 num=$(printf "%04d" $j)
-./target/release/main $1 $2 < tester/tools/in/$num.txt > tester/tools/out/$num.txt &
+./target/release/main $num $1 $2 < tester/tools/in/$num.txt > tester/tools/out/result/$num.txt &
 done
 wait
 done
+
+echo ""
+echo "visualize"
 
 cd tester/tools
 for ((i=0;i<$(($sz1 * $sz2));i++))
 do
 num=$(printf "%04d" $i)
-./run $num
+echo $num
+./run $num &> /dev/null
 add=`cat score/$num.txt`
 sum=$(( $sum + $add ))
 done
