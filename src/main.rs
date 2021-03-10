@@ -399,7 +399,7 @@ impl<'a> State<'a> {
     }
 }
 
-fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
+fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -410,7 +410,7 @@ fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, ann
     }
 }
 
-fn _simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
+fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -476,14 +476,14 @@ fn iterate(state: &mut State, start: &Instant, num: &String, pos: &mut u128, tim
             state.prob_v[j] = 1.0 / state.n as f64;
         }
         state.prob_sum = 1.0;
-        simulate(state, &start, now + (time_limit - now) / 100 * i as u128, 1, true, true, 10, &num, pos);
+        simulate_with_output(state, &start, now + (time_limit - now) / 100 * i as u128, 1, true, true, 10, &num, pos)?;
     }
 
     // 焼きなまし
-    simulate(state, &start, now + (time_limit - now) / 100 * 99, 0, true, false, 10, &num, pos);
+    simulate_with_output(state, &start, now + (time_limit - now) / 100 * 99, 0, true, false, 10, &num, pos)?;
 
     // スコアの低いものを重点的に選択
-    simulate(state, &start, now + (time_limit - now), 1, false, true, 1, &num, pos);
+    simulate_with_output(state, &start, now + (time_limit - now), 1, false, true, 1, &num, pos)?;
 
     //eprintln!("time after: {} : {}", now, time_limit);
     Ok(())
@@ -550,7 +550,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             state.prob_v[idx] = 1.0;
             state.prob_sum = 1.0;
             let now = start.elapsed().as_millis() as u128;
-            simulate(&mut state, &start, now + (time_limit - now) / 100 * i , 1, false, true, 100, &num, &mut pos);
+            simulate_with_output(&mut state, &start, now + (time_limit - now) / 100 * i , 1, false, true, 100, &num, &mut pos)?;
         }
 
         let now = start.elapsed().as_millis() as u128;
