@@ -479,53 +479,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     input! {
-        in_n: usize,
-        input: [[i64; 3]; in_n],
+        n: usize,
+        input: [[i64; 3]; n],
     }
 
-    let mut inx: Vec<i64> = vec![0; in_n];
-    let mut iny: Vec<i64> = vec![0; in_n];
-    let mut inr: Vec<i64> = vec![0; in_n];
+    let mut x: Vec<i64> = vec![0; n];
+    let mut y: Vec<i64> = vec![0; n];
+    let mut r: Vec<i64> = vec![0; n];
 
-    for i in 0..in_n {
-        inx[i] = input[i][0];
-        iny[i] = input[i][1];
-        inr[i] = input[i][2];
+    for i in 0..n {
+        x[i] = input[i][0];
+        y[i] = input[i][1];
+        r[i] = input[i][2];
     }
 
-    let mut sel = vec![true; in_n];
-
-    for i in 0..in_n {
-        for j in 0..i {
-            if inx[i] == inx[j] && iny[i] == iny[j] {
-                if inr[i] <= inr[j] {
-                    sel[j] = false;
-                } else {
-                    sel[i] = false;
-                }
-            }
-        }
-    }
-
-    let mut x: Vec<i64> = Vec::new();
-    let mut y: Vec<i64> = Vec::new();
-    let mut r: Vec<i64> = Vec::new();
-    let mut sel_idx: Vec<usize> = Vec::new();
-    let mut not_sel_idx: Vec<usize> = Vec::new();
-
-    for i in 0..in_n {
-        if sel[i] {
-            x.push(inx[i]);
-            y.push(iny[i]);
-            r.push(inr[i]);
-            sel_idx.push(i);
-        } else {
-            not_sel_idx.push(i);
-        }
-    }
-
-    let n = x.len();
-
+    // 実行過程の保存に用いるファイル名
     let num =
     if std::env::args().len() >= 2 {
         std::env::args().nth(1).unwrap()
@@ -533,6 +501,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "0000".to_string()
     };
 
+    // 焼きなましの温度
     let (start_time, end_time) =
     if std::env::args().len() >= 4 {
         (
@@ -547,7 +516,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let mut ans_score = 0.0;
     let mut ans_adv: Vec<Advertizement> = Vec::new();
-    //iterate(&mut state, &start, &num, TIME_LIMIT)?;
     let mut pos = 0;
     let mut priority: Vec<usize> = Vec::new();
     for i in 0..10 {
@@ -591,6 +559,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+
+        // デバッグ出力
         /*
         eprint!("priority");
         for i in 0..priority.len() {
@@ -598,9 +568,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         eprintln!("");
         */
-
-
-        // デバッグ出力
         //let mul = 1000000000;
         //eprintln!("cntchal: {}", state.cntchal);
         //eprintln!("cntupd: {}", state.cntupd);
@@ -620,12 +587,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     // print answer
-    if n == in_n {
-        for i in 0..n {
-            println!("{}", ans_adv[i]);
-        }
-    } else {
-        panic!("入力に同じ(x, y)が存在")
+    for i in 0..n {
+        println!("{}", ans_adv[i]);
     }
 
     Ok(())
