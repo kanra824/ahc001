@@ -161,55 +161,19 @@ impl<'a> State<'a> {
 
     fn update(&mut self, mut sign: i64, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
         // 長方形ごとのスコアに応じて確率を計算
-        let inf = 1000000000;
-        let mut i = inf;
-        if score_prob {
-            // 変化させるidx
-            let r = self.rand.randf();
-            /*
-            if r < 0.001 {
-                let mut su = 0.0;
-                for j in 0..self.n {
-                    su += self.prob_v[j];
-                }
-                eprintln!("{} : {}", su, self.prob_sum);
-            }
-            */
-            let mut now = 0.0;
-            for j in 0..self.n {
-                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
-                    i = j;
-                    break;
-                }
-                now += self.prob_v[j] / self.prob_sum;
-            }
-        } else {
-            i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
-        }
-        if i == inf {
-            return;
+
+        let i = self.calc_idx(score_prob);
+        if i == 1000000000 {
+            return 
         }
         
-        let dir_idx = self.rand.rand_int(0, 3) as usize;
-        let dir_idx2 = self.rand.rand_int(0, 3) as usize;
         // どの辺を操作するか
+        let dir_idx = self.rand.rand_int(0, 3) as usize;
         let dir = self.dir[dir_idx].clone();
-        let dir2 = self.dir[dir_idx2].clone();
+        let dir2 = self.calc_dir2(&dir);
 
-        // 変化させる方向
-        // 1: ひろげる, -1: ちぢめる
-        // 指定がなければ確率でちぢめてひろげる
-        if sign == 0 {
-            let p = self.rand.randf();
-            sign =
-                if p < 0.2 {
-                    0
-                } else if self.adv[i].area() < self.r[i] {
-                    1
-                } else {
-                    -1
-                }
-        }
+        sign = self.calc_sign(i, sign);
+        
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
         let mut ok;
@@ -336,6 +300,56 @@ impl<'a> State<'a> {
         */
     }
 
+    fn calc_idx(&mut self, score_prob: bool) -> usize {
+        let inf = 1000000000;
+        let mut i = inf;
+        if score_prob {
+            // 変化させるidx
+            let r = self.rand.randf();
+            let mut now = 0.0;
+            for j in 0..self.n {
+                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
+                    i = j;
+                    break;
+                }
+                now += self.prob_v[j] / self.prob_sum;
+            }
+        } else {
+            i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+        }
+        i
+    }
+
+    fn calc_dir2(&mut self, dir: &Direction) -> Direction{
+        let idx = self.rand.rand_int(0, 2) as usize;
+        //dir: vec![Left, Right, Up, Down],
+        let v = match dir {
+            Left => [1, 2, 3],
+            Right => [0, 2, 3],
+            Up => [0, 1, 3],
+            Down => [1, 2, 3],
+        };
+        self.dir[v[idx]].clone()
+    }
+
+    fn calc_sign(&mut self, i: usize, sign: i64) -> i64 {
+        // 変化させる方向
+        // 1: ひろげる, -1: ちぢめる
+        // 指定がなければ確率でちぢめてひろげる
+        if sign == 0 {
+            let p = self.rand.randf();
+            if p < 0.2 {
+                0
+            } else if self.adv[i].area() < self.r[i] {
+                1
+            } else {
+                -1
+            }
+        } else {
+            sign
+        }
+    }
+
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
         // i番目の広告を更新
         match dir {
@@ -385,7 +399,7 @@ impl<'a> State<'a> {
     }
 }
 
-fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
+fn _simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, _num: &String, _pos: &mut u128) {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -396,7 +410,7 @@ fn simulate(state: &mut State, start: &Instant, time_limit: u128, sign: i64, ann
     }
 }
 
-fn _simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
+fn simulate_with_output(state: &mut State, start: &Instant, time_limit: u128, sign: i64, annealing: bool, score_prob: bool, val: i64, num: &String, pos: &mut u128) -> Result<(), Box<dyn std::error::Error>> {
     let mut elapsed_time = start.elapsed().as_millis();
     while elapsed_time < time_limit {
         let temperature: f64 = state.start_tmp + (state.end_tmp - state.start_tmp) * (elapsed_time as f64) / (TIME_LIMIT as f64);
@@ -462,14 +476,14 @@ fn iterate(state: &mut State, start: &Instant, num: &String, pos: &mut u128, tim
             state.prob_v[j] = 1.0 / state.n as f64;
         }
         state.prob_sum = 1.0;
-        simulate(state, &start, now + (time_limit - now) / 100 * i as u128, 1, true, true, 10, &num, pos);
+        simulate_with_output(state, &start, now + (time_limit - now) / 100 * i as u128, 1, true, true, 10, &num, pos)?;
     }
 
     // 焼きなまし
-    simulate(state, &start, now + (time_limit - now) / 100 * 99, 0, true, false, 10, &num, pos);
+    simulate_with_output(state, &start, now + (time_limit - now) / 100 * 99, 0, true, false, 10, &num, pos)?;
 
     // スコアの低いものを重点的に選択
-    simulate(state, &start, now + (time_limit - now), 1, false, true, 1, &num, pos);
+    simulate_with_output(state, &start, now + (time_limit - now), 1, false, true, 1, &num, pos)?;
 
     //eprintln!("time after: {} : {}", now, time_limit);
     Ok(())
@@ -479,53 +493,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
 
     input! {
-        in_n: usize,
-        input: [[i64; 3]; in_n],
+        n: usize,
+        input: [[i64; 3]; n],
     }
 
-    let mut inx: Vec<i64> = vec![0; in_n];
-    let mut iny: Vec<i64> = vec![0; in_n];
-    let mut inr: Vec<i64> = vec![0; in_n];
+    let mut x: Vec<i64> = vec![0; n];
+    let mut y: Vec<i64> = vec![0; n];
+    let mut r: Vec<i64> = vec![0; n];
 
-    for i in 0..in_n {
-        inx[i] = input[i][0];
-        iny[i] = input[i][1];
-        inr[i] = input[i][2];
+    for i in 0..n {
+        x[i] = input[i][0];
+        y[i] = input[i][1];
+        r[i] = input[i][2];
     }
 
-    let mut sel = vec![true; in_n];
-
-    for i in 0..in_n {
-        for j in 0..i {
-            if inx[i] == inx[j] && iny[i] == iny[j] {
-                if inr[i] <= inr[j] {
-                    sel[j] = false;
-                } else {
-                    sel[i] = false;
-                }
-            }
-        }
-    }
-
-    let mut x: Vec<i64> = Vec::new();
-    let mut y: Vec<i64> = Vec::new();
-    let mut r: Vec<i64> = Vec::new();
-    let mut sel_idx: Vec<usize> = Vec::new();
-    let mut not_sel_idx: Vec<usize> = Vec::new();
-
-    for i in 0..in_n {
-        if sel[i] {
-            x.push(inx[i]);
-            y.push(iny[i]);
-            r.push(inr[i]);
-            sel_idx.push(i);
-        } else {
-            not_sel_idx.push(i);
-        }
-    }
-
-    let n = x.len();
-
+    // 実行過程の保存に用いるファイル名
     let num =
     if std::env::args().len() >= 2 {
         std::env::args().nth(1).unwrap()
@@ -533,6 +515,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "0000".to_string()
     };
 
+    // 焼きなましの温度
     let (start_time, end_time) =
     if std::env::args().len() >= 4 {
         (
@@ -547,7 +530,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     let mut ans_score = 0.0;
     let mut ans_adv: Vec<Advertizement> = Vec::new();
-    //iterate(&mut state, &start, &num, TIME_LIMIT)?;
     let mut pos = 0;
     let mut priority: Vec<usize> = Vec::new();
     for i in 0..10 {
@@ -568,7 +550,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             state.prob_v[idx] = 1.0;
             state.prob_sum = 1.0;
             let now = start.elapsed().as_millis() as u128;
-            simulate(&mut state, &start, now + (time_limit - now) / 100 * i , 1, false, true, 100, &num, &mut pos);
+            simulate_with_output(&mut state, &start, now + (time_limit - now) / 100 * i , 1, false, true, 100, &num, &mut pos)?;
         }
 
         let now = start.elapsed().as_millis() as u128;
@@ -591,6 +573,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+
+        // デバッグ出力
         /*
         eprint!("priority");
         for i in 0..priority.len() {
@@ -598,9 +582,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         eprintln!("");
         */
-
-
-        // デバッグ出力
         //let mul = 1000000000;
         //eprintln!("cntchal: {}", state.cntchal);
         //eprintln!("cntupd: {}", state.cntupd);
@@ -620,12 +601,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     // print answer
-    if n == in_n {
-        for i in 0..n {
-            println!("{}", ans_adv[i]);
-        }
-    } else {
-        panic!("入力に同じ(x, y)が存在")
+    for i in 0..n {
+        println!("{}", ans_adv[i]);
     }
 
     Ok(())
