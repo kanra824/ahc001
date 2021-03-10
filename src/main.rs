@@ -161,31 +161,16 @@ impl<'a> State<'a> {
 
     fn update(&mut self, mut sign: i64, annealing: bool, score_prob: bool, temperature: f64, val: i64) {
         // 長方形ごとのスコアに応じて確率を計算
-        let inf = 1000000000;
-        let mut i = inf;
-        if score_prob {
-            // 変化させるidx
-            let r = self.rand.randf();
-            let mut now = 0.0;
-            for j in 0..self.n {
-                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
-                    i = j;
-                    break;
-                }
-                now += self.prob_v[j] / self.prob_sum;
-            }
-        } else {
-            i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
-        }
-        if i == inf {
-            return;
+
+        let i = self.calc_idx(score_prob);
+        if i == 1000000000 {
+            return 
         }
         
-        let dir_idx = self.rand.rand_int(0, 3) as usize;
-        let dir_idx2 = self.rand.rand_int(0, 3) as usize;
         // どの辺を操作するか
+        let dir_idx = self.rand.rand_int(0, 3) as usize;
         let dir = self.dir[dir_idx].clone();
-        let dir2 = self.dir[dir_idx2].clone();
+        let dir2 = self.calc_dir2(&dir);
 
         sign = self.calc_sign(i, sign);
         
@@ -313,6 +298,38 @@ impl<'a> State<'a> {
             1.0 - self.score_v[i].powi(10)
         }
         */
+    }
+
+    fn calc_idx(&mut self, score_prob: bool) -> usize {
+        let inf = 1000000000;
+        let mut i = inf;
+        if score_prob {
+            // 変化させるidx
+            let r = self.rand.randf();
+            let mut now = 0.0;
+            for j in 0..self.n {
+                if now <= r && r < now + self.prob_v[j] / self.prob_sum {
+                    i = j;
+                    break;
+                }
+                now += self.prob_v[j] / self.prob_sum;
+            }
+        } else {
+            i = self.rand.rand_int(0, (self.n-1) as u64) as usize;
+        }
+        i
+    }
+
+    fn calc_dir2(&mut self, dir: &Direction) -> Direction{
+        let idx = self.rand.rand_int(0, 2) as usize;
+        //dir: vec![Left, Right, Up, Down],
+        let v = match dir {
+            Left => [1, 2, 3],
+            Right => [0, 2, 3],
+            Up => [0, 1, 3],
+            Down => [1, 2, 3],
+        };
+        self.dir[v[idx]].clone()
     }
 
     fn calc_sign(&mut self, i: usize, sign: i64) -> i64 {
