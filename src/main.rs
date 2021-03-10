@@ -166,15 +166,6 @@ impl<'a> State<'a> {
         if score_prob {
             // 変化させるidx
             let r = self.rand.randf();
-            /*
-            if r < 0.001 {
-                let mut su = 0.0;
-                for j in 0..self.n {
-                    su += self.prob_v[j];
-                }
-                eprintln!("{} : {}", su, self.prob_sum);
-            }
-            */
             let mut now = 0.0;
             for j in 0..self.n {
                 if now <= r && r < now + self.prob_v[j] / self.prob_sum {
@@ -196,20 +187,8 @@ impl<'a> State<'a> {
         let dir = self.dir[dir_idx].clone();
         let dir2 = self.dir[dir_idx2].clone();
 
-        // 変化させる方向
-        // 1: ひろげる, -1: ちぢめる
-        // 指定がなければ確率でちぢめてひろげる
-        if sign == 0 {
-            let p = self.rand.randf();
-            sign =
-                if p < 0.2 {
-                    0
-                } else if self.adv[i].area() < self.r[i] {
-                    1
-                } else {
-                    -1
-                }
-        }
+        sign = self.calc_sign(i, sign);
+        
         // 拡張した時に重なった長方形
         let mut shrinked: Vec<usize> = Vec::new();
         let mut ok;
@@ -334,6 +313,24 @@ impl<'a> State<'a> {
             1.0 - self.score_v[i].powi(10)
         }
         */
+    }
+
+    fn calc_sign(&mut self, i: usize, sign: i64) -> i64 {
+        // 変化させる方向
+        // 1: ひろげる, -1: ちぢめる
+        // 指定がなければ確率でちぢめてひろげる
+        if sign == 0 {
+            let p = self.rand.randf();
+            if p < 0.2 {
+                0
+            } else if self.adv[i].area() < self.r[i] {
+                1
+            } else {
+                -1
+            }
+        } else {
+            sign
+        }
     }
 
     fn update_adv(&mut self, i: usize, dir: &Direction, sign: i64, val: i64, shrinked: &mut Vec<usize>) -> bool {
